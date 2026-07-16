@@ -1,0 +1,86 @@
+
+
+ #shoot for boss
+    #if waves == 4 or waves == 8 or waves == 12:
+        #if time_now - last_boss_shot/(6/5) > alien_cooldown and len(boss_bullet_group) < 4 and len(alien_group) == 0 and boss.rect.center[1] >= 100 and boss.rect.center[1] <= 150 and boss.health_remaining > 0:
+            #attacking_alien = boss_group
+            #boss_bullet = Boss_Bullets(boss.rect.centerx, boss.rect.bottom)
+            #boss_bullet_group.add(boss_bullet)
+            #last_boss_shot = time_now
+    #elif time_now - last_alien_shot > alien_cooldown and len(boss_bullet_group) < 3 and len(alien_group) == 0 and boss.rect.center[1] >= 400 and boss.health_remaining > 0:
+        #attacking_alien = boss_group
+        #boss_bullet = Boss_Bullets(boss.rect.centerx, boss.rect.bottom)
+        #boss_bullet_group.add(boss_bullet)
+       #last_alien_shot = time_now
+    #shoot for boss 2, both # make a different attack when health is in danger or low
+    #if time_now - last_alien_shot/(8/5) > alien_cooldown and len(boss_bullet_group) < 6 and len(alien_group) == 0:
+        #attacking_alien = random.choice(boss_group.sprites())
+        #boss_bullet = Boss_Bullets(attacking_alien.rect.centerx, attacking_alien.rect.bottom)
+        #boss_bullet_group.add(boss_bullet)
+        #last_alien_shot = time_now
+
+
+
+
+ #Bring in clone feature
+    #if key[pygame.K_q] and spaceship.clone == 1:
+        #spaceship.clone -= 1
+        #spaceship2 = Spaceship(int(spaceship.rect.x + 115), screen_height - 100, spaceship.health_remaining)
+        #boss = Boss(int(screen_width / 2), (screen_height - 1200), 12)
+    #if spaceship.clone == 0:            (undo the # for the boss situation and delete the attritbutes anywhere else.
+        #spaceship2.update()
+        #spaceship2_group.add(spaceship2)
+        #boss.update()
+        #boss_group.add(boss)
+
+    # spaceships dont bump into eachother
+    # if key[pygame.K_RIGHT] and spaceship.rect.left > 450 and spaceship.clone == 0:
+    # spaceship.rect.x -= 8
+    # if key[pygame.K_LEFT] and spaceship.rect.left <= 0 and spaceship.clone == 0:
+    # spaceship2.rect.x += 8
+
+ #if spaceship.wave == 2  and boss_final == True:
+        #boss = Boss(int(screen_width / 2), (screen_height / 3), 12)
+        #boss.update()
+        #boss_group.update(boss)
+        #boss_final = True
+
+
+    # Alien pops up infront of you as surprise
+    #if len(alien_group) > 15  and len(alien_group) < 20 and blink == True:
+        #alien2 = Aliens2(spaceship.rect.center[0], alien_y)
+        #alien_group.add(alien2)
+        #blink = False
+    #if len(alien_group) < 14 and len(alien_group) > 9 and blink == False:
+       #alien2 = Aliens2(spaceship.rect.center[0], alien_y)
+        #blink = True
+    #if len(alien_group) < 8 and len(alien_group) > 3 and blink == True:
+        #alien2 = Aliens2(spaceship.rect.center[0], alien_y)
+        #alien_group.add(alien2)
+        #blink = False
+    #if len(alien_group) < 2 and len(alien_group) > 0 and blink == False:
+        #alien2 = Aliens2(spaceship.rect.center[0], alien_y)
+        #alien_group.add(alien2)
+        #blink = True
+
+    #create random alien bullets
+
+
+
+#aggressive_alien = random.choice(alien_group.sprites())
+#alien_x = spaceship.rect.center[0]
+#alien_y = spaceship.y - 215
+
+
+
+{current_time = 0
+trigger_time = 3000
+
+counting = pygame.time.get_ticks()
+
+if len(alien_group) == 0:
+    start = pygame.time.get_ticks()
+
+if pygame.time.get_ticks() - start > trigger_time:
+    restore aliens
+}

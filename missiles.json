@@ -1,0 +1,76 @@
+{"frames": [
+
+{
+	"filename": "missile1.png",
+	"frame": {"x":0,"y":0,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile2.png",
+	"frame": {"x":350,"y":0,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile3.png",
+	"frame": {"x":700,"y":0,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile4.png",
+	"frame": {"x":1050,"y":0,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile5.png",
+	"frame": {"x":0,"y":80,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile6.png",
+	"frame": {"x":350,"y":80,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile7.png",
+	"frame": {"x":700,"y":80,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+},
+{
+	"filename": "missile8.png",
+	"frame": {"x":1050,"y":80,"w":350,"h":80},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":350,"h":80},
+	"sourceSize": {"w":350,"h":80}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "missiles.png",
+	"format": "RGBA8888",
+	"size": {"w":1400,"h":160},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:78244bff2928e00c0c3711fa7794d419:08fd652191fc06aa494e7f75f8185fab:8d689123e69039521733e59a295f5240$"
+}
+}

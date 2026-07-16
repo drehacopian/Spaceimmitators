@@ -1,0 +1,1359 @@
+import pygame
+from pygame import mixer
+# from pygame.locals import *
+import random
+import sys
+import time
+import math
+
+# import time
+# from os import path
+# import json
+
+pygame.init()
+pygame.mixer.pre_init(44100, -16, 2, 512)
+mixer.init()
+
+
+
+#Screen Dimensions
+screen_width = 600
+screen_height = 800
+win = pygame.display.set_mode((screen_width, screen_height))
+
+
+# define game variables---------------------------------------------------------
+rows = 5
+columns = 5
+number = 1
+boss_final = False
+paused = False
+length = 1
+length2 = -1
+rate = 3
+formation = None
+post_boss_transition = False
+
+# colors
+black = (0, 0, 0)
+red = (255, 0, 0)
+green = (0, 255, 0)
+white = (255, 255, 255)
+screen_width = 600
+screen_height = 800
+
+# Variables to manage text animation
+base_size = 35  # Initial size of the text
+max_size = 55  # Maximum size when growing
+min_size = 35 # Minimum size when shrinking
+grow_time = 50  # Number of frames to grow
+shrink_time = 50  # Number of frames to shrink
+
+frame = 0  # Frame counter for animation
+growing = True  # State to track whether text is growing or shrinking
+text_size = base_size  # Initial text size
+
+#load Sounds
+explosion_fx = pygame.mixer.Sound("explosion.wav")
+explosion_fx.set_volume(0.01)
+
+explosion2_fx = pygame.mixer.Sound("explosion2.wav")
+explosion2_fx.set_volume(0.01)
+
+laser_fx = pygame.mixer.Sound("laser.wav")
+laser_fx.set_volume(0.01)
+
+
+boss_image = pygame.transform.scale(pygame.image.load("boss.png"), (120, 120))
+low_health_boss_image = pygame.transform.scale(pygame.image.load("lowhealth.png"), (120, 120))
+
+# time tools------------------------------------------------------------
+time_now = 0
+func_start = 0
+time_last_hit = 0
+
+# number of waves--------------------------------------------------
+global waves
+waves = 4
+global missilex
+global missiley
+missilex = 0
+missiley = 0
+paused = False
+global field, spawn_x, spawn_y
+cooldown = 100
+wave_in_progress = False
+pending_spawn = False
+last_wave_clear_time = 0
+blinking = False
+
+
+spawn_x = 0
+spawn_y = 0
+
+# Screen shake globals
+screen_shake_intensity = 0
+screen_shake_duration = 0
+
+# update1 add reload Flag
+
+is_gameover = True
+
+sayings = ["Are U Afraid of the DARK?", "Cindy, I don't like you using foul language",
+           "were friends to the end.... remember?", "Close your eyes and count to seven", "The bodies are pilling up"]
+saying = random.choice(sayings)
+
+#Initialize pygame clock
+clock = pygame.time.Clock()
+fps = 60
+
+bg = pygame.image.load("bg.png")
+
+#Load images
+#try:
+
+alien_cooldown = 1000  # ms
+last_alien_shot = pygame.time.get_ticks()
+last_boss_shot = pygame.time.get_ticks()
+
+alien_attack_interval = 3000  # Milliseconds between attacks (3 seconds)
+last_attack_time = pygame.time.get_ticks()
+
+clock.tick(fps)
+move_counter = 0
+move_direction = 1
+adjustment = 0
+
+# --- Bullets (player & alien) ---
+bullet_base = pygame.image.load("bullet.png")
+alien_bullet_base = pygame.image.load("alien_bullet.png")
+
+big_bullet  = pygame.transform.scale(bullet_base, (60, 60))
+med1_bullet = pygame.transform.scale(bullet_base, (40, 40))
+med2_bullet = pygame.transform.scale(bullet_base, (50, 50))
+sm1_bullet  = pygame.transform.scale(bullet_base, (20, 20))
+sm2_bullet  = pygame.transform.scale(bullet_base, (30, 30))
+small_bullet = pygame.transform.scale(bullet_base, (20, 20))  # alias you already use
+
+big_boss_bullet  = pygame.transform.scale(alien_bullet_base, (90, 90))
+med1_boss_bullet = pygame.transform.scale(alien_bullet_base, (60, 60))
+med2_boss_bullet = pygame.transform.scale(alien_bullet_base, (75, 75))
+sm1_boss_bullet  = pygame.transform.scale(alien_bullet_base, (30, 30))
+sm2_boss_bullet  = pygame.transform.scale(alien_bullet_base, (45, 45))
+small_boss_bullet = alien_bullet_base  # original size
+
+# --- Explosions (pre-scaled frames by size) ---
+EXPLOSION_FRAMES = {
+    1: [pygame.transform.scale(pygame.image.load(f"exp{n}.png"), (20, 20))  for n in range(1, 6)],
+    2: [pygame.transform.scale(pygame.image.load(f"exp{n}.png"), (40, 40))  for n in range(1, 6)],
+    3: [pygame.transform.scale(pygame.image.load(f"exp{n}.png"), (160, 160)) for n in range(1, 6)],
+}
+
+# --- Ships, Aliens, Boss, Shields ---
+ships = [
+    pygame.image.load("spaceship.png"),
+    pygame.image.load("spaceship.png"),  # kept duplicate index for compatibility
+    pygame.image.load("spaceship2.png"),
+    pygame.image.load("spaceship3.png"),
+]
+
+alien_images = [pygame.transform.scale(pygame.image.load(f"alien{i}.png"), (40, 40)) for i in range(1, 6)]
+
+boss_image = pygame.transform.scale(pygame.image.load("boss.png"), (120, 120))
+low_health_boss_image = pygame.transform.scale(pygame.image.load("lowhealth.png"), (120, 120))
+
+shield_image = pygame.image.load("shield.png")
+small_shield_image = pygame.transform.scale(shield_image, (55, 45))
+
+
+# SpriteSheet-------------------------------------------------------------------------------
+class SpriteSheet():
+    def __init__(self, image):
+        self.sheet = image
+
+    def get_image(self, x, y, w, h, colour, rotate, xx, yy):
+        image = pygame.Surface((w, h)).convert_alpha()
+        image.blit(self.sheet, (0, 0), (x, y, w, h))
+        image = pygame.transform.scale(image, (xx, yy))
+        image = pygame.transform.rotate(image, rotate)
+        image.set_colorkey(colour)
+
+        return image
+
+pygame.display.set_caption('Spritesheets')
+sprite_sheet_image = pygame.image.load('missiles.png').convert_alpha()
+sprite_sheet_image2 = pygame.image.load('thruster.png').convert_alpha()
+sprite_sheet = SpriteSheet(sprite_sheet_image)
+scale = 7
+
+# SpriteSheet Grabs  self, x, y, w, h, colour, rotate, xx, yy--------------------------------------
+miss1 = sprite_sheet.get_image(0, 0, 350, 80, black, 90, 50, 15)
+miss2 = sprite_sheet.get_image(350, 0, 350, 80, black, 90, 50, 15)
+miss3 = sprite_sheet.get_image(700, 0, 350, 80, black, 90, 50, 15)
+miss4 = sprite_sheet.get_image(1050, 0, 350, 80, black, 90, 50, 15)
+miss5 = sprite_sheet.get_image(0, 80, 350, 80, black, 90, 50, 15)
+miss6 = sprite_sheet.get_image(350, 80, 350, 80, black, 90, 50, 15)
+miss7 = sprite_sheet.get_image(700, 80, 350, 80, black, 90, 50, 15)
+miss8 = sprite_sheet.get_image(1050, 80, 350, 80, black, 90, 50, 15)
+missileup = [miss1, miss1, miss1, miss2, miss3, miss4, miss5, miss6, miss7, miss8, miss7, miss8]
+
+upgrade_missile = miss1
+
+sprite_sheet2 = SpriteSheet(sprite_sheet_image2)
+
+# jet thrusters for boss-------------------------------------------------------------------------------------
+thrust1 = sprite_sheet2.get_image(0, 0, 204, 287, black, 0, 51, 71)
+thrust2 = sprite_sheet2.get_image(0, 287, 204, 287, black, 0, 51, 71)
+thrust3 = sprite_sheet2.get_image(0, 574, 204, 287, black, 0, 51, 71)
+
+pygame.display.set_caption("Space Imitators")
+
+level_direction_toggle = True
+
+# ================================
+#  ASSET PRELOADING
+# ================================
+
+# Thrust
+sprite_sheet_image2 = pygame.image.load("thruster.png").convert_alpha()
+sprite_sheet2 = SpriteSheet(sprite_sheet_image2)
+
+thrust1 = sprite_sheet2.get_image(0, 0, 204, 287, black, 0, 51, 71)
+thrust2 = sprite_sheet2.get_image(0, 287, 204, 287, black, 0, 51, 71)
+thrust3 = sprite_sheet2.get_image(0, 574, 204, 287, black, 0, 51, 71)
+
+
+# Funcions...............................................
+
+def charge1(image, x, y):
+    win.blit(image, (x - 110, y - 35))
+    win.blit(image, (x - 110, y - 95))
+    win.blit(image, (x - 110, y - 155))
+
+    win.blit(image, (x + 100, y - 35))
+    win.blit(image, (x + 100, y - 95))
+    win.blit(image, (x + 100, y - 155))
+
+def charge2(image, x, y):
+    win.blit(image, (x - 80, y - 60))
+    win.blit(image, (x - 80, y - 95))
+    win.blit(image, (x - 80, y - 130))
+
+    win.blit(image, (x + 70, y - 60))
+    win.blit(image, (x + 70, y - 95))
+    win.blit(image, (x + 70, y - 130))
+
+def charge3(image, x, y):
+    win.blit(image, (x - 50, y - 90))
+    win.blit(image, (x - 50, y - 95))
+    win.blit(image, (x - 50, y - 100))
+
+    win.blit(image, (x + 40, y - 90))
+    win.blit(image, (x + 40, y - 95))
+    win.blit(image, (x + 40, y - 100))
+
+def pause():
+    paused = True
+
+    while paused:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_u and paused == True:
+                    paused = False
+                    break
+                    # paused = False
+
+        # win.fill(white)
+
+def draw_bg(speed=2.0):
+    # Just use the scrolling function
+    moving_screen(speed)
+# screen moves top down
+def moving_screen(speed=3.0):
+    global y1, y
+    y1 += speed
+    y += speed
+    win.blit(bg, (x, round(y)))
+    win.blit(bg, (x1, round(y1)))
+    if y > h:
+        y = -h
+    if y1 > h:
+        y1 = -h
+
+# define function for creatin text
+def draw_text(text, font, text_col, x, y):
+    img = font.render(text, True, text_col)
+    win.blit(img, (x, y))
+
+def draw_text2(text, size, color, x, y):
+    font_name = pygame.font.match_font(FONT_NAME)
+    font = pygame.font.Font(font_name, size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.midtop = (x, y)
+    win.blit(text_surface, text_rect)
+
+def animate_text():
+    global frame, growing, text_size
+
+    # Text animation logic
+    if growing:
+        text_size = base_size + (max_size - base_size) * (frame / grow_time)
+        if frame >= grow_time:
+            growing = False
+            frame = 0
+    else:
+        text_size = max_size - (max_size - min_size) * (frame / shrink_time)
+        if frame >= shrink_time:
+            growing = True
+            frame = 0
+
+    frame += 1
+    return int(text_size)
+
+# start screen
+def show_start_screen():
+
+    # update2 Move the display background logic to the wait for key
+    wait_for_key()
+
+# loop For Start Screen
+def wait_for_key():
+    waiting = True
+    while waiting:
+        # update2 add Move the display background logic
+        moving_screen()
+        intro_spaceship_group.add(intro_spaceship, intro_spaceship2, intro_spaceship3)
+        intro_boss_group.add(intro_boss)
+        # Call animate_text() to get the current animated size
+        animated_size = animate_text()
+
+        # Draw the animated text with the new size
+        draw_text2("SPACEIMITATORS!!!", animated_size, green, screen_width / 2, screen_height / 4)
+        # draw_text2("<  or  > to move, Spacebar to fire", 22, green, screen_width / 2, screen_height / 3)
+        if intro_spaceship2.rect.centery < 600:
+            draw_text2("Press any key", 22, green, screen_width / 2, screen_height - 150)
+
+        # update
+        intro_spaceship_group.update()
+        intro_boss_group.update()
+
+        # Draw
+        intro_spaceship_group.draw(win)
+        intro_boss_group.draw(win)
+        pygame.display.update()
+        clock.tick(fps)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+                pygame.QUIT
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    waiting = False
+
+# Game Over function
+def show_go_screen():
+    waiting = True
+    change = 1
+    rate = 1
+
+    while waiting:
+
+        moving_screen()
+        draw_text2("GAME OVER!!!", 68 + change, red, screen_width / 2, screen_height / 4)
+        change += rate
+        if change >= 45:
+            rate *= -1
+        # elif change <= -15:
+        # rate *= -1
+        # draw_text2("change: " + str(change), 22, red, screen_width / 1 * 3/4, screen_height / 1 * 2/3)
+        draw_text2(saying, 22, red, screen_width / 2, screen_height / 2)
+        draw_text2("Press Any Key to Play Again", 22, red, screen_width / 2, screen_height * 3 / 4)
+        pygame.display.update()
+        clock.tick(fps)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+            if event.type == pygame.KEYDOWN:
+                waiting = False
+
+def create_aliens():
+    global level_direction_toggle, formation, move_counter
+
+    move_counter = 0
+    move_direction = 1
+
+    if waves not in (4, 8, 12):  # skip boss waves
+        for row in range(rows):
+            for item in range(columns):
+                alien = Aliens(
+                    formation,              # ✅ pass shared formation
+                    item, row,              # col, row
+                    100 + item * 100,       # base x
+                    100 + row * 70,         # base y
+                    move_counter,
+                    move_direction,
+                    level_direction_toggle
+                )
+                alien_group.add(alien)
+                field[row][item] = 1
+
+    # flip direction for next wave
+    level_direction_toggle = not level_direction_toggle
+
+# regenerating space invaders within the wave
+def regen_invaders():
+    if waves != 1 or len(alien_group) > 20:
+        return
+    # record the location of any invader alive
+    # is it plus or minus the spawning area? add or subtract it
+    down = random.randint(0, rows - 1)
+    across = random.randint(0, columns - 1)
+    if field[down][across] == 0:
+        _extracted_from_regen_invaders_8(across, down)
+
+# TODO Rename this here and in `regen_invaders`
+def _extracted_from_regen_invaders_8(across, down):
+    global move_counter
+    global move_direction
+    global adjustment
+    adjustment = (75 + move_counter) * move_direction
+    alien = Aliens((100 + adjustment) + across * 100, 100 + down * 70, down, across, move_counter,
+                   move_direction)
+    alien_group.add(alien)
+    field[down][across] = 1
+
+# wave after wave of aliens
+def restore_aliens():
+    global move_counter, waves, level_direction_toggle, formation
+    global pending_spawn, last_wave_clear_time
+
+    # ✅ skip entirely if this is a boss or post-boss wave
+    if waves in (4, 8, 12):
+        return
+
+    if pending_spawn and len(alien_group) == 0:
+        if time_now - last_wave_clear_time >= 3000:
+            move_counter = 0
+            pending_spawn = False
+            # ❌ don’t increment waves here
+            for row in range(rows):
+                for item in range(columns):
+                    alien = Aliens(formation, item, row, 100 + item * 100, 100 + row * 70, move_counter, 1, level_direction_toggle)
+                    alien_group.add(alien)
+                    field[row][item] = 1
+
+
+            level_direction_toggle = not level_direction_toggle
+
+# team assist from tiger ship
+def missile_assist():
+    missile = Missiles(350, 1000)
+    missile_group.add(missile)
+    spaceship.last_shot = time_now
+
+def screen_blink():
+    global rate, length, post_boss_transition, pending_spawn, last_wave_clear_time
+
+    # scale by real frame time
+    dt = clock.get_time() / 16.0   # normalize ~60fps
+    length += rate * dt
+
+    # draw bars (AFTER everything else)
+    pygame.draw.rect(win, black, (0, 0, screen_width, int(length)))
+    pygame.draw.rect(win, black, (0, screen_height - int(length), screen_width, int(length)))
+
+    if length >= (screen_height / 2):
+        rate = -abs(rate)
+    elif length <= 0:
+        length = 0
+        rate = abs(rate)
+        post_boss_transition = False
+        pending_spawn = True
+        last_wave_clear_time = pygame.time.get_ticks()
+
+def boss_charge_effect(x1, x2, y1, y2, y3):
+    win.blit(small_boss_bullet, (boss.rect.centerx + x1, boss.rect.centery + y1))
+    win.blit(small_boss_bullet, (boss.rect.centerx + x1, boss.rect.centery + y2))
+    win.blit(small_boss_bullet, (boss.rect.centerx + x1, boss.rect.centery + y3))
+
+    win.blit(small_boss_bullet, (boss.rect.centerx + x2, boss.rect.centery + y1))
+    win.blit(small_boss_bullet, (boss.rect.centerx + x2, boss.rect.centery + y2))
+    win.blit(small_boss_bullet, (boss.rect.centerx + x2, boss.rect.centery + y3))
+
+def manage_alien_attacks():
+    global last_attack_time
+
+    # Check if it's time for an alien to attack
+    current_time = pygame.time.get_ticks()
+    if current_time - last_attack_time > alien_attack_interval:
+        last_attack_time = current_time
+
+        candidates = [alien for alien in alien_group if alien.in_formation]
+        if candidates:  # only pick if not empty
+            attacking_alien = random.choice(candidates)
+            attacking_alien.start_attack(spaceship.rect.centerx)
+
+def start_screen_shake(intensity=5, duration=15):
+    global screen_shake_intensity, screen_shake_duration
+    screen_shake_intensity = intensity
+    screen_shake_duration = duration
+
+def apply_screen_shake(surface):
+    global screen_shake_intensity, screen_shake_duration
+    if screen_shake_duration > 0:
+        screen_shake_duration -= 1
+        offset_x = random.randint(-screen_shake_intensity, screen_shake_intensity)
+        offset_y = random.randint(-screen_shake_intensity, screen_shake_intensity)
+        win.blit(surface, (offset_x, offset_y))
+    else:
+        win.blit(surface, (0, 0))
+
+def handle_events():
+    global run, paused, angle, ship_angle
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p:
+                paused = not paused  # toggle pause
+
+    # Continuous key holds
+    keys = pygame.key.get_pressed()
+
+    # --- Rotation ---
+    if keys[pygame.K_z]:
+        spaceship.rotate(2)
+        angle -= 2
+        ship_angle += 2
+
+    if keys[pygame.K_x]:
+        spaceship.rotate(-2)
+        angle += 2
+        ship_angle -= 2
+
+    # --- Movement ---
+    if keys[pygame.K_LEFT] and spaceship.rect.left > 0:
+        spaceship.rect.x -= 5
+    if keys[pygame.K_RIGHT] and spaceship.rect.right < screen_width:
+        spaceship.rect.x += 5
+    if keys[pygame.K_UP] and spaceship.rect.top > 0:
+        spaceship.rect.y -= 5
+    if keys[pygame.K_DOWN] and spaceship.rect.bottom < screen_height:
+        spaceship.rect.y += 5
+
+    # --- Fire bullet ---
+    if keys[pygame.K_SPACE] and time_now - spaceship.last_shot > cooldown:
+        bullet = Bullets(spaceship.rect.centerx, spaceship.rect.top, angle)
+        bullets_group.add(bullet)
+        spaceship.last_shot = time_now
+        laser_fx.play()
+
+    # --- Missile assist ---
+    if keys[pygame.K_a] and time_now - spaceship.last_shot > cooldown * 5:
+        missile_assist()
+
+# define fonts........................................................
+font30 = pygame.font.SysFont
+FONT_NAME = 'arial'
+
+
+speed_list2 = [4, 5, 6]
+height_list = [0, 100, 200]
+speed = random.choice(speed_list2)
+border = random.choice([475, 485, 495])
+start_health = 6
+hit_cooldown = 10000
+
+background_size = bg.get_size()
+background_rect = bg.get_rect()
+# win = pygame.display.set_mode(background_size)
+w, h = background_size
+x = 0
+y = 0
+
+x1 = 0
+y1 = -h
+
+charge_adjust_x = 0
+charge_adjust_y = 0
+global angle
+angle = 90
+ship_angle = 30
+
+# OBJECTS HERE------------------------
+class Formation:
+    def __init__(self, speed=1, max_offset=75):
+        self.offset_x = 0
+        self.direction = 1
+        self.speed = speed
+        self.max_offset = max_offset
+
+    def update(self):
+        self.offset_x += self.direction * self.speed
+        if abs(self.offset_x) > self.max_offset:
+            self.direction *= -1
+
+class Spaceship(pygame.sprite.Sprite):
+    def __init__(self, x, y, health, ship):
+        super().__init__()
+        self.image_orig = ships[ship]
+        self.image = self.image_orig
+        self.rect = self.image.get_rect(center=(x, y))
+        self.angle = 0
+        self.health_start = health
+        self.health_remaining = health
+        self.last_shot = pygame.time.get_ticks()
+
+    def rotate(self, angle):
+        self.angle += angle
+        self.image = pygame.transform.rotate(self.image_orig, self.angle)
+        self.rect = self.image.get_rect(center=self.rect.center)
+
+class Aliens(pygame.sprite.Sprite):
+    def __init__(self, formation, col, row, x, y, move_counter, move_direction, level_direction_toggle):
+        super().__init__()
+        self.base_image = random.choice(alien_images)
+        self.image = self.base_image.copy()
+        self.rect = self.image.get_rect(center=(x, y))
+        self.formation = formation
+        self.row = row
+        self.col = col
+        self.move_counter = move_counter
+        self.move_direction = move_direction
+        self.level_direction_toggle = level_direction_toggle
+        self.attack = False
+        self.returning = False
+        self.return_time = 0
+        self.attack_start_x = x
+        self.original_y = y
+
+class Aliens2(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("alien" + str(random.randint(1, 5)) + ".png")
+        self.rect = self.image.get_rect()
+        self.rect.center = [x, y]
+        self.move_counter = 0
+        self.move_direction = 1
+
+    def update(self):
+        self.rect.x += self.move_direction * 3
+        self.move_counter += 1
+        if abs(self.move_counter) > 75:
+            self.move_direction *= -1
+            self.move_counter *= self.move_direction
+
+class Boss(pygame.sprite.Sprite):
+    def __init__(self, x, y, health):
+        super().__init__()
+        self.base_image = boss_image
+        self.low_health_image = low_health_boss_image
+        self.image = self.base_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.health_start = health
+        self.health_remaining = health
+        self.last_shot = pygame.time.get_ticks()
+        self.charge_counter = 0   # ✅ added back
+
+class Bullets(pygame.sprite.Sprite):
+    base_image = pygame.image.load("bullet.png")  # already preloaded in assets
+
+    def __init__(self, x, y, angle, speed=10):
+        super().__init__()
+        self.original_image = Bullets.base_image
+        self.image = pygame.transform.rotate(self.original_image, angle - 90)
+        self.rect = self.image.get_rect(center=(x, y))
+
+        self.angle = angle
+        theta_rad = math.radians(self.angle)
+        self.speed = speed
+        self.velocity_x = self.speed * math.cos(theta_rad)
+        self.velocity_y = -self.speed * math.sin(theta_rad)
+
+        self.size_multiplier = 1.0
+        self.pulsate_speed = 0.1
+        self.base_size = self.rect.size
+
+    def pulsate(self):
+        self.size_multiplier = 1.0 + 0.2 * math.sin(pygame.time.get_ticks() * self.pulsate_speed)
+        scaled_size = (
+            int(self.base_size[0] * self.size_multiplier),
+            int(self.base_size[1] * self.size_multiplier)
+        )
+        self.image = pygame.transform.scale(self.original_image, scaled_size)
+
+    def move(self):
+        self.rect.x += self.velocity_x
+        self.rect.y += self.velocity_y
+        if self.rect.bottom < 0:
+            self.kill()
+
+    def handle_collisions(self, groups):
+        (
+            alien_bullet_group, boss_group, shield_group,
+            alien_group, boss_bullet_group, Boss_Charge_Shot_group,
+            explosion_group, boss, shield
+        ) = groups
+
+        if pygame.sprite.spritecollide(self, alien_bullet_group, True, pygame.sprite.collide_mask):
+            self.kill()
+            explosion2_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 1)
+            explosion_group.add(explosion)
+            return
+
+        collision_groups = [
+            (boss_group, True),
+            (shield_group, False),
+            (alien_group, True),
+            (boss_bullet_group, False),
+            (Boss_Charge_Shot_group, False)
+        ]
+
+        for group, kill_on_hit in collision_groups:
+            if pygame.sprite.spritecollide(self, group, kill_on_hit):
+                self.trigger_explosion(explosion_group)
+                if group == boss_group:
+                    boss.health_remaining -= 0.5
+                elif group == shield_group:
+                    shield.health_remaining -= 1
+                break
+
+    def trigger_explosion(self, explosion_group):
+        self.kill()
+        explosion_fx.play()
+        explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+        explosion_group.add(explosion)
+
+    def update(self, groups=None):
+        self.pulsate()
+        self.move()
+        if groups:
+            self.handle_collisions(groups)
+
+class Missiles(pygame.sprite.Sprite):
+    def __init__(self, x, y, target):
+        super().__init__()
+        self.image = pygame.image.load("missile.png")
+        self.rect = self.image.get_rect(center=(x, y))
+        self.target = target
+        self.speed = 5
+
+    def update(self):
+        dx, dy = self.target.rect.centerx - self.rect.centerx, self.target.rect.centery - self.rect.centery
+        dist = math.hypot(dx, dy)
+        if dist != 0:
+            dx, dy = dx / dist, dy / dist
+        self.rect.x += dx * self.speed
+        self.rect.y += dy * self.speed
+        if self.rect.bottom < 0:
+            self.kill()
+
+class Shield(pygame.sprite.Sprite):
+    def __init__(self, x, y, health):
+        super().__init__()
+        self.image = shield_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.health_start = health
+        self.health_remaining = health
+
+class Charge_Shot(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.image.load("bullet.png")
+        self.image = pygame.transform.scale(self.image, (60, 60))
+        self.rect = self.image.get_rect(center=(x, y))
+
+    # Movement
+    def move(self):
+        self.rect.y -= 10
+        if self.rect.bottom < 0:
+            self.kill()
+
+    # Collision Handlers
+    def handle_alien_collision(self):
+        if pygame.sprite.spritecollide(self, alien_group, True):
+            explosion_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+
+    def handle_boss_collision(self):
+        if pygame.sprite.spritecollide(self, boss_group, True):
+            self.kill()
+            explosion_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 3)
+            explosion_group.add(explosion)
+            boss.health_remaining -= 5
+
+    def handle_shield_collision(self):
+        if pygame.sprite.spritecollide(self, shield_group, False):
+            self.kill()
+            explosion_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 3)
+            explosion_group.add(explosion)
+            shield_group.draw(win)
+
+    def handle_boss_bullet_collision(self):
+        if pygame.sprite.spritecollide(self, boss_bullet_group, True):
+            explosion_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+
+    def handle_missile_collision(self):
+        if pygame.sprite.spritecollide(self, missile_group, False):
+            self.kill()
+            explosion_fx.play()
+            # cluster explosion effect
+            offsets = [(0, 0), (25, 0), (-25, 0), (0, -25), (0, 25)]
+            for dx, dy in offsets:
+                explosion = Explosion(self.rect.centerx + dx, self.rect.centery + dy, 3)
+                explosion_group.add(explosion)
+
+    def handle_boss_charge_collision(self):
+        if pygame.sprite.spritecollide(self, Boss_Charge_Shot_group, False):
+            self.kill()
+            explosion_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 3)
+            explosion_group.add(explosion)
+
+    # Update
+    def update(self):
+        self.move()
+        self.handle_alien_collision()
+        self.handle_boss_collision()
+        self.handle_shield_collision()
+        self.handle_boss_bullet_collision()
+        self.handle_missile_collision()
+        self.handle_boss_charge_collision()
+
+class Boss_Charge_Shot(pygame.sprite.Sprite):
+    def __init__(self, x, y, target_x=None, target_y=None):
+        super().__init__()
+        self.original_image = pygame.image.load("alien_bullet.png")
+        self.original_image = pygame.transform.scale(self.original_image, (100, 100))
+        self.image = pygame.transform.rotate(self.original_image, 180)
+        self.rect = self.image.get_rect(center=(x, y))
+
+        # Movement setup (angled if target given)
+        if target_x is not None and target_y is not None:
+            dx, dy = target_x - x, target_y - y
+            angle = math.degrees(math.atan2(dy, dx))
+            speed = 10
+            self.velocity_x = speed * math.cos(math.radians(angle))
+            self.velocity_y = speed * math.sin(math.radians(angle))
+            self.image = pygame.transform.rotate(self.original_image, -angle)
+        else:
+            self.velocity_x = 0
+            self.velocity_y = 10
+
+    def move(self):
+        self.rect.x += self.velocity_x
+        self.rect.y += self.velocity_y
+        if self.rect.top > screen_height:
+            self.kill()
+
+    def handle_spaceship_collision(self):
+        if pygame.sprite.spritecollide(self, spaceship_group, True, pygame.sprite.collide_mask):
+            self.kill()
+            explosion2_fx.play()
+            spaceship.health_remaining = 0
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 3)
+            explosion_group.add(explosion)
+
+    def handle_charge_shot_collision(self):
+        # Overrides player's charge shot
+        if pygame.sprite.spritecollide(self, Charge_Shot_group, True, pygame.sprite.collide_mask):
+            explosion2_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+
+    def handle_missile_collision(self):
+        if pygame.sprite.spritecollide(self, missile_group, True, pygame.sprite.collide_mask):
+            # Cancel both
+            self.kill()
+            explosion_fx.play()
+
+            # Twice as big blast
+            big_explosion = RadiatingExplosion(
+                self.rect.centerx, self.rect.centery,
+                radius=400, damage=3  # doubled radius from 200 → 400
+            )
+            explosion_group.add(big_explosion)
+
+    def update(self):
+        self.move()
+        self.handle_spaceship_collision()
+        self.handle_charge_shot_collision()
+        self.handle_missile_collision()
+
+class Alien_Bullets(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.image.load("alien_bullet.png")
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def move(self):
+        self.rect.y += 10
+        if self.rect.top > screen_height:
+            self.kill()
+
+    def handle_spaceship_collision(self):
+        if pygame.sprite.spritecollide(self, spaceship_group, False, pygame.sprite.collide_mask):
+            global time_last_hit
+            time_last_hit = pygame.time.get_ticks()
+            self.kill()
+            explosion2_fx.play()
+            spaceship.health_remaining -= 1
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+            if spaceship.health_remaining <= 0:
+                explosion2 = Explosion(spaceship.rect.centerx, spaceship.rect.centery, 3)
+                explosion_group.add(explosion2)
+
+    def handle_charge_shot_collision(self):
+        if pygame.sprite.spritecollide(self, Charge_Shot_group, False, pygame.sprite.collide_mask):
+            self.kill()
+            explosion2_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+
+    def handle_player_bullet_collision(self):
+        if pygame.sprite.spritecollide(self, bullets_group, True, pygame.sprite.collide_mask):
+            self.kill()
+            explosion2_fx.play()
+            # smaller explosion for bullet cancel
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 1)
+            explosion_group.add(explosion)
+
+    def update(self):
+        self.move()
+        self.handle_spaceship_collision()
+        self.handle_charge_shot_collision()
+        self.handle_player_bullet_collision()
+
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, x, y, size):
+        super().__init__()
+        self.images = EXPLOSION_FRAMES[size]  # ✅ Just reuse preloaded list
+        self.index = 0
+        self.image = self.images[self.index]
+        self.rect = self.image.get_rect(center=(x, y))
+        self.counter = 0
+
+    def update(self):
+        explosion_speed = 3
+        self.counter += 1
+
+        if self.counter >= explosion_speed:
+            self.counter = 0
+            self.index += 1
+            if self.index < len(self.images):
+                self.image = self.images[self.index]
+            else:
+                self.kill()
+
+class Boss_Bullets(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.image.load("alien_bullet.png")
+        self.image = pygame.transform.scale(self.image, (50, 50))
+        self.image = pygame.transform.rotate(self.image, 180)
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def move(self):
+        self.rect.y += 10
+        if self.rect.top > screen_height:
+            self.kill()
+
+    def handle_spaceship_collision(self):
+        if pygame.sprite.spritecollide(self, spaceship_group, False, pygame.sprite.collide_mask):
+            global time_last_hit
+            time_last_hit = pygame.time.get_ticks()
+            self.kill()
+            explosion2_fx.play()
+            spaceship.health_remaining -= 2
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+            if spaceship.health_remaining <= 0:
+                explosion2 = Explosion(spaceship.rect.centerx, spaceship.rect.centery, 3)
+                explosion_group.add(explosion2)
+
+    def handle_charge_shot_collision(self):
+        # Boss bullet is stronger → removes Charge_Shot
+        if pygame.sprite.spritecollide(self, Charge_Shot_group, True, pygame.sprite.collide_mask):
+            explosion2_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+
+    def handle_missile_collision(self):
+        # Boss bullet overrides missiles → destroys missile, keeps going
+        if pygame.sprite.spritecollide(self, missile_group, True, pygame.sprite.collide_mask):
+            explosion2_fx.play()
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion_group.add(explosion)
+            # Boss bullet does NOT self.kill() → keeps flying
+
+    def update(self):
+        self.move()
+        self.handle_spaceship_collision()
+        self.handle_charge_shot_collision()
+        self.handle_missile_collision()
+
+class RadiatingExplosion(pygame.sprite.Sprite):
+    def __init__(self, x, y, radius=200, damage=3):
+        super().__init__()
+        self.center = (x, y)
+        self.max_radius = radius
+        self.cross_radius = 0
+        self.diag_radius = 0
+        self.growth_speed = 15
+        self.damage = damage
+        self.timer = 0
+
+        # Delay before diagonals start
+        self.diagonal_delay = 20  # ~1 second
+        self.diagonal_active = False
+
+        # Invisible sprite controller
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=self.center)
+
+        # First explosion
+        explosion2_fx.play()
+        start_screen_shake(intensity=14, duration=20)
+
+    def update(self):
+        self.timer += 1
+
+        # ---- Cross ( + ) always active ----
+        self.cross_radius += self.growth_speed
+        if self.cross_radius <= self.max_radius and self.timer % 5 == 0:
+            cross_offsets = [
+                (self.cross_radius, 0), (-self.cross_radius, 0),
+                (0, self.cross_radius), (0, -self.cross_radius)
+            ]
+            for dx, dy in cross_offsets:
+                explosion = Explosion(self.center[0] + dx, self.center[1] + dy, 3)
+                explosion_group.add(explosion)
+
+        # ---- Start diagonals fresh from center ----
+        if self.timer == self.diagonal_delay:
+            self.diagonal_active = True
+            self.diag_radius = 0  # reset to center
+            explosion2_fx.play()
+            start_screen_shake(intensity=12, duration=15)
+
+        # ---- Diagonal ( X ) after delay ----
+        if self.diagonal_active:
+            self.diag_radius += self.growth_speed
+            if self.diag_radius <= self.max_radius and self.timer % 5 == 0:
+                diag_offsets = [
+                    (self.diag_radius, self.diag_radius),
+                    (-self.diag_radius, self.diag_radius),
+                    (self.diag_radius, -self.diag_radius),
+                    (-self.diag_radius, -self.diag_radius)
+                ]
+                for dx, dy in diag_offsets:
+                    explosion = Explosion(self.center[0] + dx, self.center[1] + dy, 3)
+                    explosion_group.add(explosion)
+
+        # Kill once both are done
+        if self.cross_radius > self.max_radius and self.diag_radius > self.max_radius:
+            self.kill()
+
+        # Functional damage
+        self.check_collisions()
+
+    def check_collisions(self):
+        for alien in pygame.sprite.spritecollide(self, alien_group, True, pygame.sprite.collide_mask):
+            explosion_group.add(Explosion(alien.rect.centerx, alien.rect.centery, 2))
+
+        if pygame.sprite.spritecollide(self, boss_group, False, pygame.sprite.collide_mask):
+            boss.health_remaining -= self.damage
+
+        if pygame.sprite.spritecollide(self, spaceship_group, False, pygame.sprite.collide_mask):
+            spaceship.health_remaining -= self.damage
+            if spaceship.health_remaining <= 0:
+                explosion_group.add(Explosion(spaceship.rect.centerx, spaceship.rect.centery, 3))
+
+        for group in [bullets_group, alien_bullet_group, boss_bullet_group]:
+            pygame.sprite.spritecollide(self, group, True, pygame.sprite.collide_mask)
+
+class Thrust(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = thrust1
+        self.rect = self.image.get_rect()
+        self.x = x
+        self.y = y
+        self.rect.center = [x, y]
+        self.thrust_counter = 0
+
+    def update(self):
+        # update mask
+        self.mask = pygame.mask.from_surface(self.image)
+        if boss.rect.y != 100 and boss.rect.y != 400 and boss.rect.y != 1000:
+            self.rect.x = boss.rect.centerx - 25
+            self.rect.y = boss.rect.y - 60
+
+# Spaceship class for continuous up-down movement with dynamic borders
+class Intro_Spaceship(pygame.sprite.Sprite):
+    def __init__(self, x, y, health, ship, upper_border, lower_border, speed):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = ships[ship]
+        self.rect = self.image.get_rect()
+        self.rect.center = [x, y]
+        self.health_start = health
+        self.health_remaining = health
+        self.last_shot = pygame.time.get_ticks()
+        self.counter = 0
+        self.speed = speed  # Speed of movement for the ship
+        self.direction = -1  # Start by moving upwards
+        self.upper_border = upper_border  # Initial upper limit
+        self.lower_border = lower_border  # Initial lower limit
+        self.screen_height = 800  # Total screen height
+
+    def update(self):
+        # Move the ship in the current direction (up or down)
+        self.rect.centery += self.speed * self.direction
+
+        # Reverse direction if the ship hits the upper or lower border
+        if self.rect.centery <= self.upper_border:
+            self.direction = 1  # Start moving down
+            self.set_new_borders()  # Change the borders after hitting the upper border
+        elif self.rect.centery >= self.lower_border:
+            self.direction = -1  # Start moving up
+            self.set_new_borders()  # Change the borders after hitting the lower border
+
+    def set_new_borders(self):
+        # Set a new upper border between 0.25 * screen height and the current lower border
+        self.upper_border = random.randint(0.25 * self.screen_height, self.lower_border - 50)
+
+        # Set a new lower border between the current upper border and 0.75 * screen height
+        self.lower_border = random.randint(self.upper_border + 50, 0.75 * self.screen_height)
+
+class Intro_Boss(pygame.sprite.Sprite):
+    def __init__(self, x, y, health):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.transform.rotate(boss_image, 180)
+        self.x = x
+        self.y = y
+        self.rect = self.image.get_rect()
+        self.rect.center = [x, y]
+        self.health_start = health
+        self.health_remaining = health
+        self.last_shot = pygame.time.get_ticks()
+        self.move_counter = 0
+        self.charge_counter = 0
+        self.pass_counter = 0
+        self.move_direction = 1  # change back to 1
+        self.move = True
+        self.counter = 0
+
+    def update(self):
+        self.rect.centery += 3
+        self.counter += .5
+
+        if self.counter > 50 and self.counter < 127:
+            self.rect.centery -= 5
+
+        if self.counter > 127:
+            self.counter = 0
+            self.rect.centerx = random.choice([200, 300, 400, 500])
+
+boss = Boss(int(screen_width / 2), screen_height - 1200, 12)
+
+thrust = Thrust(boss.rect.centerx - 25, boss.rect.y - 60)
+spaceship = Spaceship(int(screen_width / 2), screen_height - 100, start_health, 1)
+formation = Formation(speed=1, max_offset=75)
+
+# Sprite Groups...................................................................
+all_sprites = pygame.sprite.Group()
+bullets = pygame.sprite.Group()
+spaceship_group = pygame.sprite.Group()
+boss_group = pygame.sprite.Group()
+bullets_group = pygame.sprite.Group()
+alien_group = pygame.sprite.Group()
+alien_bullet_group = pygame.sprite.Group()
+boss_bullet_group = pygame.sprite.Group()
+Boss_Charge_Shot_group = pygame.sprite.Group()
+explosion_group = pygame.sprite.Group()
+shield_group = pygame.sprite.Group()
+missile_group = pygame.sprite.Group()
+Charge_Shot_group = pygame.sprite.Group()
+thrust_group = pygame.sprite.Group()
+intro_spaceship_group = pygame.sprite.Group()
+intro_boss_group = pygame.sprite.Group()
+# mini_shield_group = pygame.sprite.Group()
+
+spaceship_group.add(spaceship)
+thrust_group.add(thrust)
+shield = Shield(boss.rect.center[0] - 85, boss.rect.center[1] - 40, 10)
+# adds the 3 intro ships to fly at different speeds
+intro_spaceship = Intro_Spaceship(150, screen_height + height_list[0], 3, 2, upper_border=100, lower_border=400, speed=random.choice([2, 2.5, 3, 3.5]))
+intro_spaceship2 = Intro_Spaceship(300, screen_height + height_list[1], 3, 1, upper_border=150, lower_border=450, speed=random.choice([2, 2.5, 3, 3.5]))
+intro_spaceship3 = Intro_Spaceship(450, screen_height + height_list[2], 3, 3, upper_border=200, lower_border=500, speed=random.choice([2, 2.5, 3, 3.5]))
+
+intro_boss = Intro_Boss(random.choice([200, 300, 400, 500, 600]), -300, 12)
+
+top = spaceship.rect.top
+center = spaceship.rect.centery
+
+# to keep track of the space invaders within the wave
+
+field = [[0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0]]
+
+show_start_screen()
+
+create_aliens()
+
+# Game Loop
+game_over = False
+run = True
+while run:
+
+    if game_over:
+        show_go_screen()
+        game_over = False
+        waves = 0
+
+        # Reset player
+        spaceship = Spaceship(int(screen_width / 2), screen_height - 100, start_health, 1)
+        spaceship_group.empty()
+        spaceship_group.add(spaceship)
+        spaceship.health_remaining = spaceship.health_start
+
+        # Reset sprite groups (just clear them)
+        bullets_group.empty()
+        explosion_group.empty()
+        alien_group.empty()
+        boss_group.empty()
+        shield_group.empty()
+        boss_bullet_group.empty()
+        missile_group.empty()
+        Charge_Shot_group.empty()
+
+        # Reset formation
+        formation = Formation(speed=1, max_offset=75)
+
+        # Reset counters
+        move_counter = 0
+
+    clock.tick(fps)
+    key = pygame.key.get_pressed()
+
+    # record current time
+    time_now = pygame.time.get_ticks()
+
+    manage_alien_attacks()
+
+    if len(alien_group) == 0 and not pending_spawn and waves not in (4, 8, 12) and not post_boss_transition:
+        if (waves + 1) in (4, 8, 12):
+            # Next wave will be a boss
+            waves += 1
+        else:
+            # Normal alien wave progression
+            waves += 1
+            last_wave_clear_time = time_now
+            pending_spawn = True
+
+    # waves of aliens restoring
+    if waves not in (4, 8, 12) and not game_over:
+        restore_aliens()
+
+    # Boss waves
+    if waves in (4, 8, 12) and not game_over:
+        boss_group.add(boss)
+        shield_group.add(shield)
+
+    if post_boss_transition and not game_over:
+        screen_blink()
+
+    # shoot
+    # took this out >>>>> and len(alien_bullet_group) < 5
+    if time_now - last_alien_shot > alien_cooldown and len(alien_group) > 0:
+        attacking_alien = random.choice(alien_group.sprites())
+        alien_bullet = Alien_Bullets(attacking_alien.rect.centerx, attacking_alien.rect.bottom + 10)
+        alien_bullet_group.add(alien_bullet)
+        last_alien_shot = time_now
+
+    handle_events()
+    if paused:
+        continue  # skip rest of loop until unpaused
+
+    draw_bg()
+    moving_screen()
+
+    # Keeping track of counts tools
+    # draw_text2('last hit : ' + str(time_last_hit), 24, green, screen_width / 1.2, screen_height / 1.9)
+    # draw_text2('time now : ' + str(time_now), 24, green, screen_width / 1.2, screen_height / 1.7)
+    # draw_text2('game over : ' + str(game_over), 24, green, screen_width / 1.2, screen_height / 1.5)
+    # draw_text2('invaders  : ' + str(len(alien_group)), 24, green, screen_width / 1.2, screen_height / 1.2)
+    # draw_text2('# of aliens : ' + str(field), 16, green, screen_width / 2, screen_height / 1.3)
+    draw_text2('# move counter : ' + str(move_counter), 16, green, screen_width / 1.2, screen_height / 1.1)
+    draw_text2(' Waves : ' + str(waves), 24, green, screen_width / 1.2, screen_height / 1.5)
+    draw_text2(' charge counter : ' + str(boss.charge_counter), 24, green, screen_width / 1.3, screen_height / 1.7)
+    #draw_text2(' angle2 : ' + str(angle2), 24, green, screen_width / 1.3, screen_height / 1.8)
+    draw_text2(' spawn_x : ' + str(spawn_x), 24, green, screen_width / 1.6, screen_height / 1.4)
+    draw_text2(' spawn_y : ' + str(spawn_y), 24, green, screen_width / 2.5, screen_height / 1.6)
+    draw_text2(' ship_angle : ' + str(ship_angle), 24, green, screen_width / 1.3, screen_height / 1.9)
+    draw_text2(' angle : ' + str(angle), 24, green, screen_width / 1.6, screen_height / 1.5)
+    # randomized the speed, height, and counter for intro
+    speed = random.choice([7, 6, 8])
+    border = random.choice([575, 585, 595])
+
+    # update..............................
+    spaceship.update()
+    formation.update()
+    alien_group.update()
+    bullets_group.update((
+        alien_bullet_group, boss_group, shield_group, alien_group,
+        boss_bullet_group, Boss_Charge_Shot_group, explosion_group,
+        boss, shield
+    ))
+
+    shield_group.update()
+    if waves == 4 or waves == 8 or waves == 12:
+        boss_group.update()
+    thrust_group.update()
+    Boss_Charge_Shot_group.update()
+    alien_bullet_group.update()
+    Charge_Shot_group.update()
+    boss_bullet_group.update()
+    explosion_group.update()
+    missile_group.update()
+
+    # Draw.....................................
+    # win.blit(thrust1, (350, 250))
+    spaceship_group.draw(win)
+    if post_boss_transition and not game_over:
+        screen_blink()
+
+    missile_group.draw(win)
+    alien_group.draw(win)
+    if waves == 4 or waves == 8 or waves == 12:
+        boss_group.draw(win)
+    Charge_Shot_group.draw(win)
+    Boss_Charge_Shot_group.draw(win)
+    bullets_group.draw(win)
+    alien_bullet_group.draw(win)
+    boss_bullet_group.draw(win)
+    explosion_group.draw(win)
+    if waves == 4:
+        win.blit(upgrade_missile, ((int(screen_width / 2), (screen_height / 2))))
+    apply_screen_shake(win)
+    pygame.display.flip()
+
+pygame.quit()

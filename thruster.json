@@ -1,0 +1,36 @@
+{"frames": {
+
+"fire1.png":
+{
+	"frame": {"x":0,"y":0,"w":204,"h":287},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":204,"h":287},
+	"sourceSize": {"w":204,"h":287}
+},
+"fire2.png":
+{
+	"frame": {"x":0,"y":287,"w":204,"h":287},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":204,"h":287},
+	"sourceSize": {"w":204,"h":287}
+},
+"fire3.png":
+{
+	"frame": {"x":0,"y":574,"w":204,"h":287},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":204,"h":287},
+	"sourceSize": {"w":204,"h":287}
+}},
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "thruster.png",
+	"format": "RGBA8888",
+	"size": {"w":204,"h":861},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:6aa7c6f2cc45077d4441ab1bd20c8ef7:56c5ba98a862b01e8cc566377314f300:527d2563ec26e3f8249319924a92472f$"
+}
+}
