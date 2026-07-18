@@ -16,8 +16,8 @@ mixer.init()
 
 
 
-from assets import (bg, ships, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet,small_bullet)  # keep names identical everywhere
-from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets)
+from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
+from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien)
 from effects import Explosion, RadiatingExplosion, Thrust
 
 
@@ -835,6 +835,8 @@ charge_trail_group = pygame.sprite.Group()
 thrust_group = pygame.sprite.Group()
 intro_spaceship_group = pygame.sprite.Group()
 intro_boss_group = pygame.sprite.Group()
+background_ship_group = pygame.sprite.Group()
+background_alien_group = pygame.sprite.Group()
 # mini_shield_group = pygame.sprite.Group()
 
 import sprites
@@ -851,7 +853,15 @@ sprites.missile_group = missile_group
 sprites.Charge_Shot_group = Charge_Shot_group
 sprites.Boss_Charge_Shot_group = Boss_Charge_Shot_group
 
+
 spaceship_group.add(spaceship)
+lane_x = 300
+
+background_alien = BackgroundAlien(lane_x, screen_height + 40)
+background_alien_group.add(background_alien)
+
+background_ship = BackgroundShip(ships[2], lane_x, screen_height + 220)
+background_ship_group.add(background_ship)
 thrust_group.add(thrust)
 shield = Shield(boss.rect.center[0] - 85, boss.rect.center[1] - 40, 10)
 # adds the 3 intro ships to fly at different speeds
@@ -979,6 +989,8 @@ while run:
     # update..............................
     spaceship.update()
     formation.update()
+    background_ship_group.update()
+    background_alien_group.update()
     alien_group.update()
     bullets_group.update((
         alien_bullet_group, boss_group, shield_group, alien_group,
@@ -1000,6 +1012,10 @@ while run:
 
     # Draw.....................................
     # win.blit(thrust1, (350, 250))
+    # Draw.....................................
+    # win.blit(thrust1, (350, 250))
+    background_ship_group.draw(win)
+    background_alien_group.draw(win)
     spaceship_group.draw(win)
     if post_boss_transition and not game_over:
         screen_blink()

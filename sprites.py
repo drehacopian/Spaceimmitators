@@ -53,6 +53,71 @@ def load_animation_row(filename, row, columns=4, total_rows=4):
 
     return frames
 
+class BackgroundShip(pygame.sprite.Sprite):
+    def __init__(self, image, x, y, scale=0.5):
+        super().__init__()
+
+        width = int(image.get_width() * scale)
+        height = int(image.get_height() * scale)
+
+        self.image = pygame.transform.smoothscale(image, (width, height))
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 5
+
+    def update(self):
+        self.rect.y -= self.speed
+
+        if self.rect.bottom < 0:
+            self.kill()
+
+
+class BackgroundAlien(pygame.sprite.Sprite):
+    def __init__(self, x, y, scale=0.75):
+        super().__init__()
+
+        self.alien_number = random.randint(1, 5)
+        sheet_name = f"alien{self.alien_number}.png"
+
+        self.frames = load_animation_row(
+            sheet_name,
+            row=0,
+            columns=4,
+            total_rows=4
+        )
+
+        self.frames = [
+            pygame.transform.smoothscale(
+                frame,
+                (
+                    int(frame.get_width() * scale),
+                    int(frame.get_height() * scale)
+                )
+            )
+            for frame in self.frames
+        ]
+
+        self.frame_index = random.randint(0, len(self.frames) - 1)
+        self.animation_speed = 0.12
+        self.image = self.frames[int(self.frame_index)]
+
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 5
+
+    def update(self):
+        self.frame_index += self.animation_speed
+
+        if self.frame_index >= len(self.frames):
+            self.frame_index = 0
+
+        old_center = self.rect.center
+
+        self.image = self.frames[int(self.frame_index)]
+        self.rect = self.image.get_rect(center=old_center)
+
+        self.rect.y -= self.speed
+
+        if self.rect.bottom < 0:
+            self.kill()
 
 # --- Spaceship ---
 class Spaceship(pygame.sprite.Sprite):
@@ -729,3 +794,6 @@ class Boss_Bullets(pygame.sprite.Sprite):
         self.handle_spaceship_collision()
         self.handle_charge_shot_collision()
         self.handle_missile_collision()
+
+#------ cinematics----
+

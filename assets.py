@@ -59,8 +59,13 @@ ships = [
     pygame.image.load("spaceship2.png"),
     pygame.image.load("spaceship3.png"),
 ]
-
-alien_images = [pygame.transform.scale(pygame.image.load(f"alien{i}.png"), (40, 40)) for i in range(1, 6)]
+alien_images = [
+    pygame.transform.scale(
+        pygame.image.load(f"alien{i}.png"),
+        (40, 40)
+    )
+    for i in range(1, 6)
+]
 
 boss_image = pygame.transform.scale(pygame.image.load("boss.png"), (120, 120))
 low_health_boss_image = pygame.transform.scale(pygame.image.load("lowhealth.png"), (120, 120))
