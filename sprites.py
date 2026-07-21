@@ -53,6 +53,132 @@ def load_animation_row(filename, row, columns=4, total_rows=4):
 
     return frames
 
+class BackgroundBeamEffect(pygame.sprite.Sprite):
+    def __init__(self, ship, scale):
+        super().__init__()
+        self.ship = ship
+        self.scale = scale
+        self.start_time = pygame.time.get_ticks()
+        self.charge_duration = 900
+        self.beam_duration = 700
+        self.phase = "charge"
+
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+
+        self.fade_after_hit = False
+        self.hit_time = 0
+
+    def update(self):
+        if not self.ship.alive():
+            self.kill()
+            return
+
+        elapsed = pygame.time.get_ticks() - self.start_time
+
+        if self.fade_after_hit:
+            if pygame.time.get_ticks() - self.hit_time >= 180:
+                self.ship.beam_attack_finished = True
+                self.kill()
+                return
+
+        if elapsed < self.charge_duration:
+            self.phase = "charge"
+            self.draw_charge(elapsed)
+
+        elif elapsed < self.charge_duration + self.beam_duration:
+            self.phase = "beam"
+            self.draw_beam(elapsed - self.charge_duration)
+
+        else:
+            self.ship.beam_attack_finished = True
+            self.kill()
+
+    def draw_charge(self, elapsed):
+        pulse = int((elapsed // 70) % 4)
+        charge_progress = min(1.0, elapsed / self.charge_duration)
+        diameter = max(14, int((18 + charge_progress * 24 + pulse * 2) * self.scale))
+
+        self.image = pygame.Surface((diameter * 3, diameter * 3), pygame.SRCALPHA)
+        center = self.image.get_width() // 2
+
+        pygame.draw.circle(
+            self.image,
+            (40, 120, 255, 60),
+            (center, center),
+            diameter
+        )
+
+        pygame.draw.circle(
+            self.image,
+            (80, 180, 255, 150),
+            (center, center),
+            max(4, diameter // 2)
+        )
+
+        pygame.draw.circle(
+            self.image,
+            (230, 250, 255, 240),
+            (center, center),
+            max(2, diameter // 4)
+        )
+
+        self.rect = self.image.get_rect(
+            centerx=self.ship.rect.centerx,
+            bottom=self.ship.rect.top + int(8 * self.scale)
+        )
+
+    def draw_beam(self, elapsed):
+        pulse = int((elapsed // 60) % 3)
+        beam_width = max(16, int((28 + pulse * 3) * self.scale))
+        beam_height = max(1, self.ship.rect.top)
+
+        self.image = pygame.Surface(
+            (beam_width * 3, beam_height),
+            pygame.SRCALPHA
+        )
+
+        center_x = self.image.get_width() // 2
+
+        outer_points = [
+            (center_x - beam_width, beam_height),
+            (center_x - beam_width // 2, 0),
+            (center_x + beam_width // 2, 0),
+            (center_x + beam_width, beam_height)
+        ]
+
+        middle_points = [
+            (center_x - beam_width // 2, beam_height),
+            (center_x - beam_width // 4, 0),
+            (center_x + beam_width // 4, 0),
+            (center_x + beam_width // 2, beam_height)
+        ]
+
+        pygame.draw.polygon(
+            self.image,
+            (40, 100, 255, 90),
+            outer_points
+        )
+
+        pygame.draw.polygon(
+            self.image,
+            (80, 190, 255, 190),
+            middle_points
+        )
+
+        pygame.draw.line(
+            self.image,
+            (240, 255, 255, 255),
+            (center_x, beam_height),
+            (center_x, 0),
+            max(2, beam_width // 4)
+        )
+
+        self.rect = self.image.get_rect(
+            centerx=self.ship.rect.centerx,
+            bottom=self.ship.rect.top
+        )
+
 class BackgroundShip(pygame.sprite.Sprite):
     def __init__(self, image, x, y, scale=0.5):
         super().__init__()
@@ -62,10 +188,55 @@ class BackgroundShip(pygame.sprite.Sprite):
 
         self.image = pygame.transform.smoothscale(image, (width, height))
         self.rect = self.image.get_rect(center=(x, y))
-        self.speed = 5
 
-    def update(self):
+        self.normal_centerx = self.rect.centerx
+        self.active_beam_effect = None
+
+        self.speed = 6.5
+        self.scale = scale
+
+        self.uses_beam_attack = random.random() < 0.25
+        self.beam_attack_started = False
+        self.beam_attack_finished = False
+        self.spawn_time = pygame.time.get_ticks()
+
+        self.last_shot = pygame.time.get_ticks()
+        self.shoot_delay = 700
+
+    def update(self, bullet_group, alien_group, beam_effect_group):
         self.rect.y -= self.speed
+        current_time = pygame.time.get_ticks()
+
+        if (
+            self.uses_beam_attack
+            and not self.beam_attack_started
+            and alien_group
+            and self.rect.top < pygame.display.get_surface().get_height() - 140
+        ):
+            beam_effect = BackgroundBeamEffect(self, self.scale)
+            beam_effect.start_time = pygame.time.get_ticks()
+            beam_effect_group.add(beam_effect)
+
+            self.active_beam_effect = beam_effect
+            self.beam_attack_started = True
+
+        if (
+            alien_group
+            and not self.uses_beam_attack
+            and current_time - self.last_shot >= self.shoot_delay
+        ):
+            bullet = BackgroundBullet(self.rect.centerx, self.rect.top)
+            bullet_group.add(bullet)
+            self.last_shot = current_time
+
+        self.rect.centerx = self.normal_centerx
+
+        if (
+            self.active_beam_effect
+            and self.active_beam_effect.alive()
+            and self.active_beam_effect.phase == "charge"
+        ):
+            self.rect.centerx += random.randint(-3, 3)
 
         if self.rect.bottom < 0:
             self.kill()
@@ -102,6 +273,7 @@ class BackgroundAlien(pygame.sprite.Sprite):
 
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 5
+        self.health = random.randint(1, 4)
 
     def update(self):
         self.frame_index += self.animation_speed
@@ -118,6 +290,50 @@ class BackgroundAlien(pygame.sprite.Sprite):
 
         if self.rect.bottom < 0:
             self.kill()
+
+class BackgroundBullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+
+        self.image = pygame.Surface((5, 18), pygame.SRCALPHA)
+        pygame.draw.rect(self.image, (255, 255, 120), self.image.get_rect())
+
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 10
+
+    def update(self):
+        self.rect.y -= self.speed
+
+        if self.rect.bottom < 0:
+            self.kill()
+
+class BackgroundExplosion(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+
+        self.frames = []
+        for radius in (8, 14, 20, 26):
+            image = pygame.Surface((60, 60), pygame.SRCALPHA)
+            pygame.draw.circle(image, (255, 220, 80), (30, 30), radius)
+            self.frames.append(image)
+
+        self.frame_index = 0
+        self.image = self.frames[self.frame_index]
+        self.rect = self.image.get_rect(center=(x, y))
+        self.last_update = pygame.time.get_ticks()
+        self.frame_delay = 70
+
+    def update(self):
+        current_time = pygame.time.get_ticks()
+
+        if current_time - self.last_update >= self.frame_delay:
+            self.frame_index += 1
+            self.last_update = current_time
+
+            if self.frame_index >= len(self.frames):
+                self.kill()
+            else:
+                self.image = self.frames[self.frame_index]
 
 # --- Spaceship ---
 class Spaceship(pygame.sprite.Sprite):

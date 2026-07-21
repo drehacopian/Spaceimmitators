@@ -17,7 +17,7 @@ mixer.init()
 
 
 from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
-from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien)
+from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion)
 from effects import Explosion, RadiatingExplosion, Thrust
 
 
@@ -837,6 +837,9 @@ intro_spaceship_group = pygame.sprite.Group()
 intro_boss_group = pygame.sprite.Group()
 background_ship_group = pygame.sprite.Group()
 background_alien_group = pygame.sprite.Group()
+background_bullet_group = pygame.sprite.Group()
+background_beam_effect_group = pygame.sprite.Group()
+background_explosion_group = pygame.sprite.Group()
 # mini_shield_group = pygame.sprite.Group()
 
 import sprites
@@ -855,13 +858,11 @@ sprites.Boss_Charge_Shot_group = Boss_Charge_Shot_group
 
 
 spaceship_group.add(spaceship)
-lane_x = 300
 
-background_alien = BackgroundAlien(lane_x, screen_height + 40)
-background_alien_group.add(background_alien)
+background_spawn_delay = random.randint(1800, 4000)
+last_background_spawn = pygame.time.get_ticks() - background_spawn_delay
+last_background_lane = None
 
-background_ship = BackgroundShip(ships[2], lane_x, screen_height + 220)
-background_ship_group.add(background_ship)
 thrust_group.add(thrust)
 shield = Shield(boss.rect.center[0] - 85, boss.rect.center[1] - 40, 10)
 # adds the 3 intro ships to fly at different speeds
@@ -989,8 +990,59 @@ while run:
     # update..............................
     spaceship.update()
     formation.update()
-    background_ship_group.update()
+    current_time = pygame.time.get_ticks()
+
+    if current_time - last_background_spawn >= background_spawn_delay:
+        background_lanes = [150, 250, 350, 450, 550, 650]
+        available_lanes = [lane for lane in background_lanes if lane != last_background_lane]
+        lane_x = random.choice(available_lanes)
+        last_background_lane = lane_x
+
+        battle_size = random.choice([1.0, 0.85, 0.7])
+        alien_scale = 0.75 * battle_size
+        ship_scale = 0.5 * battle_size
+
+        background_alien = BackgroundAlien(lane_x, screen_height + 40, alien_scale)
+        background_alien_group.add(background_alien)
+
+        background_ship = BackgroundShip(ships[2], lane_x, screen_height + 450, ship_scale)
+        background_ship_group.add(background_ship)
+
+        last_background_spawn = current_time
+        background_spawn_delay = random.randint(1800, 4000)
+    background_ship_group.update(
+        background_bullet_group,
+        background_alien_group,
+        background_beam_effect_group
+    )
+    for beam in background_beam_effect_group:
+        if beam.phase != "beam" or beam.fade_after_hit:
+            continue
+
+        hit_aliens = pygame.sprite.spritecollide(beam, background_alien_group, False)
+
+        if hit_aliens:
+            alien = hit_aliens[0]
+            explosion = BackgroundExplosion(alien.rect.centerx, alien.rect.centery)
+            background_explosion_group.add(explosion)
+
+            alien.kill()
+            beam.fade_after_hit = True
+            beam.hit_time = pygame.time.get_ticks()
+
+    background_beam_effect_group.update()
+    background_bullet_group.update()
     background_alien_group.update()
+    background_explosion_group.update()
+    background_hits = pygame.sprite.groupcollide(background_alien_group, background_bullet_group, False, True)
+
+    for alien, bullets in background_hits.items():
+        alien.health -= len(bullets)
+
+        if alien.health <= 0:
+            explosion = BackgroundExplosion(alien.rect.centerx, alien.rect.centery)
+            background_explosion_group.add(explosion)
+            alien.kill()
     alien_group.update()
     bullets_group.update((
         alien_bullet_group, boss_group, shield_group, alien_group,
@@ -1016,6 +1068,9 @@ while run:
     # win.blit(thrust1, (350, 250))
     background_ship_group.draw(win)
     background_alien_group.draw(win)
+    background_bullet_group.draw(win)
+    background_beam_effect_group.draw(win)
+    background_explosion_group.draw(win)
     spaceship_group.draw(win)
     if post_boss_transition and not game_over:
         screen_blink()
