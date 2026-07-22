@@ -195,9 +195,9 @@ class Intro_Boss(pygame.sprite.Sprite):
 
 random.shuffle(height_list)
 #adds the 3 intro ships to fly at different speeds
-intro_spaceship = Intro_Spaceship(150, screen_height + height_list[0], 3)
-intro_spaceship2 = Intro_Spaceship(300, screen_height + height_list[1], 3)
-intro_spaceship3 = Intro_Spaceship(450, screen_height + height_list[2], 3)
+intro_spaceship = Intro_Spaceship(150, screen_height + height_list[0], 0)
+intro_spaceship2 = Intro_Spaceship(300, screen_height + height_list[1], 1)
+intro_spaceship3 = Intro_Spaceship(450, screen_height + height_list[2], 2)
 
 intro_boss = Intro_Boss(random.choice([200, 300, 400, 500, 600]), -300, 12)
 

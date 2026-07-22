@@ -55,7 +55,6 @@ EXPLOSION_FRAMES = {
 # --- Ships, Aliens, Boss, Shields ---
 ships = [
     pygame.image.load("spaceship.png"),
-    pygame.image.load("spaceship.png"),  # kept duplicate index for compatibility
     pygame.image.load("spaceship2.png"),
     pygame.image.load("spaceship3.png"),
 ]

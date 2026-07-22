@@ -82,6 +82,8 @@ last_wave_clear_time = 0
 blinking = False
 
 
+
+
 spawn_x = 0
 spawn_y = 0
 
@@ -775,10 +777,15 @@ class Intro_Spaceship(pygame.sprite.Sprite):
 
     def set_new_borders(self):
         # Set a new upper border between 0.25 * screen height and the current lower border
-        self.upper_border = random.randint(0.25 * self.screen_height, self.lower_border - 50)
+        self.upper_border = random.randint(
+            int(0.25 * self.screen_height),
+            int(self.lower_border - 50)
+        )
 
-        # Set a new lower border between the current upper border and 0.75 * screen height
-        self.lower_border = random.randint(self.upper_border + 50, 0.75 * self.screen_height)
+        self.lower_border = random.randint(
+            int(self.upper_border + 50),
+            int(0.75 * self.screen_height)
+        )
 
 class Intro_Boss(pygame.sprite.Sprite):
     def __init__(self, x, y, health):
@@ -866,9 +873,36 @@ last_background_lane = None
 thrust_group.add(thrust)
 shield = Shield(boss.rect.center[0] - 85, boss.rect.center[1] - 40, 10)
 # adds the 3 intro ships to fly at different speeds
-intro_spaceship = Intro_Spaceship(150, screen_height + height_list[0], 3, 2, upper_border=100, lower_border=400, speed=random.choice([2, 2.5, 3, 3.5]))
-intro_spaceship2 = Intro_Spaceship(300, screen_height + height_list[1], 3, 1, upper_border=150, lower_border=450, speed=random.choice([2, 2.5, 3, 3.5]))
-intro_spaceship3 = Intro_Spaceship(450, screen_height + height_list[2], 3, 3, upper_border=200, lower_border=500, speed=random.choice([2, 2.5, 3, 3.5]))
+# Adds the 3 intro ships at different positions and speeds
+intro_spaceship = Intro_Spaceship(
+    150,
+    screen_height + height_list[0],
+    3,
+    0,
+    200,
+    600,
+    4
+)
+
+intro_spaceship2 = Intro_Spaceship(
+    300,
+    screen_height + height_list[1],
+    3,
+    1,
+    200,
+    600,
+    5
+)
+
+intro_spaceship3 = Intro_Spaceship(
+    450,
+    screen_height + height_list[2],
+    3,
+    2,
+    200,
+    600,
+    6
+)
 
 intro_boss = Intro_Boss(random.choice([200, 300, 400, 500, 600]), -300, 12)
 
@@ -941,6 +975,10 @@ while run:
             last_wave_clear_time = time_now
             pending_spawn = True
 
+        overhead_spawned_this_wave = False
+        overhead_spawn_time = time_now + random.randint(4000, 9000)
+
+
     # waves of aliens restoring
     if waves not in (4, 8, 12) and not game_over:
         restore_aliens()
@@ -952,6 +990,8 @@ while run:
 
     if post_boss_transition and not game_over:
         screen_blink()
+
+
 
     # shoot
     # took this out >>>>> and len(alien_bullet_group) < 5
@@ -1005,7 +1045,18 @@ while run:
         background_alien = BackgroundAlien(lane_x, screen_height + 40, alien_scale)
         background_alien_group.add(background_alien)
 
-        background_ship = BackgroundShip(ships[2], lane_x, screen_height + 450, ship_scale)
+        ship_image = random.choices(
+            [ships[0], ships[1], ships[2]],
+            weights=[80, 10, 10],
+            k=1
+        )[0]
+
+        background_ship = BackgroundShip(
+            ship_image,
+            lane_x,
+            screen_height + 450,
+            ship_scale
+        )
         background_ship_group.add(background_ship)
 
         last_background_spawn = current_time
@@ -1061,6 +1112,7 @@ while run:
     boss_bullet_group.update()
     explosion_group.update()
     missile_group.update()
+
 
     # Draw.....................................
     # win.blit(thrust1, (350, 250))

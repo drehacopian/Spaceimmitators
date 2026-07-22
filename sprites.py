@@ -241,6 +241,65 @@ class BackgroundShip(pygame.sprite.Sprite):
         if self.rect.bottom < 0:
             self.kill()
 
+class OverheadFlyover(pygame.sprite.Sprite):
+    def __init__(self, image, screen_width, screen_height):
+        super().__init__()
+
+        scale = random.uniform(1.8, 2.6)
+
+        width = int(image.get_width() * scale)
+        height = int(image.get_height() * scale)
+
+        self.image = pygame.transform.smoothscale(image, (width, height))
+        self.original_image = self.image
+
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+
+        self.direction = random.choice(["left_to_right", "right_to_left"])
+
+        if self.direction == "left_to_right":
+            self.rect = self.image.get_rect(
+                right=-50,
+                centery=random.randint(
+                    screen_height // 4,
+                    screen_height * 3 // 4
+                )
+            )
+
+            self.speed_x = random.uniform(10, 15)
+
+        else:
+            self.image = pygame.transform.flip(self.image, True, False)
+
+            self.rect = self.image.get_rect(
+                left=screen_width + 50,
+                centery=random.randint(
+                    screen_height // 4,
+                    screen_height * 3 // 4
+                )
+            )
+
+            self.speed_x = random.uniform(-15, -10)
+
+        self.speed_y = random.uniform(-1.5, 1.5)
+
+        self.position_x = float(self.rect.x)
+        self.position_y = float(self.rect.y)
+
+    def update(self):
+        self.position_x += self.speed_x
+        self.position_y += self.speed_y
+
+        self.rect.x = int(self.position_x)
+        self.rect.y = int(self.position_y)
+
+        if (
+            self.rect.left > self.screen_width + 150
+            or self.rect.right < -150
+        ):
+            self.kill()
+
 
 class BackgroundAlien(pygame.sprite.Sprite):
     def __init__(self, x, y, scale=0.75):
