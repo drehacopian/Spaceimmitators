@@ -17,7 +17,7 @@ mixer.init()
 
 
 from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
-from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion)
+from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion, BackgroundAlienBullet)
 from effects import Explosion, RadiatingExplosion, Thrust
 
 
@@ -819,7 +819,7 @@ class Intro_Boss(pygame.sprite.Sprite):
 boss = Boss(int(screen_width / 2), screen_height - 1200, 12)
 
 thrust = Thrust(boss.rect.centerx, boss.rect.top, boss, [thrust1, thrust2, thrust3])
-spaceship = Spaceship(int(screen_width / 2), screen_height - 100, start_health, 1)
+spaceship = Spaceship(int(screen_width / 2), screen_height - 100, start_health, 0)
 import sprites
 sprites.spaceship = spaceship
 formation = Formation(speed=1, max_offset=75)
@@ -847,6 +847,8 @@ background_alien_group = pygame.sprite.Group()
 background_bullet_group = pygame.sprite.Group()
 background_beam_effect_group = pygame.sprite.Group()
 background_explosion_group = pygame.sprite.Group()
+background_alien_bullet_group = pygame.sprite.Group()
+background_smoke_group = pygame.sprite.Group()
 # mini_shield_group = pygame.sprite.Group()
 
 import sprites
@@ -1033,7 +1035,14 @@ while run:
     current_time = pygame.time.get_ticks()
 
     if current_time - last_background_spawn >= background_spawn_delay:
-        background_lanes = [150, 250, 350, 450, 550, 650]
+        background_lanes = [
+            75,
+            165,
+            255,
+            345,
+            435,
+            525
+        ]
         available_lanes = [lane for lane in background_lanes if lane != last_background_lane]
         lane_x = random.choice(available_lanes)
         last_background_lane = lane_x
@@ -1064,7 +1073,10 @@ while run:
     background_ship_group.update(
         background_bullet_group,
         background_alien_group,
-        background_beam_effect_group
+        background_beam_effect_group,
+        background_alien_bullet_group,
+        background_smoke_group,
+        background_explosion_group
     )
     for beam in background_beam_effect_group:
         if beam.phase != "beam" or beam.fade_after_hit:
@@ -1083,7 +1095,20 @@ while run:
 
     background_beam_effect_group.update()
     background_bullet_group.update()
-    background_alien_group.update()
+    background_alien_group.update(
+        background_ship_group,
+        background_alien_bullet_group
+    )
+    background_alien_bullet_group.update()
+    background_ship_hits = pygame.sprite.groupcollide(
+        background_ship_group,
+        background_alien_bullet_group,
+        False,
+        True
+    )
+
+    for ship, bullets in background_ship_hits.items():
+        ship.take_damage(len(bullets))
     background_explosion_group.update()
     background_hits = pygame.sprite.groupcollide(background_alien_group, background_bullet_group, False, True)
 
@@ -1110,6 +1135,7 @@ while run:
     Charge_Shot_group.update()
     charge_trail_group.update()
     boss_bullet_group.update()
+    background_smoke_group.update()
     explosion_group.update()
     missile_group.update()
 
@@ -1118,6 +1144,7 @@ while run:
     # win.blit(thrust1, (350, 250))
     # Draw.....................................
     # win.blit(thrust1, (350, 250))
+    background_smoke_group.update()
     background_ship_group.draw(win)
     background_alien_group.draw(win)
     background_bullet_group.draw(win)
@@ -1140,6 +1167,7 @@ while run:
     bullets_group.draw(win)
     alien_bullet_group.draw(win)
     boss_bullet_group.draw(win)
+    background_alien_bullet_group.draw(win)
     explosion_group.draw(win)
     if waves == 4:
         win.blit(upgrade_missile, ((int(screen_width / 2), (screen_height / 2))))

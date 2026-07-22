@@ -186,57 +186,260 @@ class BackgroundShip(pygame.sprite.Sprite):
         width = int(image.get_width() * scale)
         height = int(image.get_height() * scale)
 
-        self.image = pygame.transform.smoothscale(image, (width, height))
+        self.original_image = pygame.transform.smoothscale(
+            image,
+            (width, height)
+        )
+
+        self.image = self.original_image
         self.rect = self.image.get_rect(center=(x, y))
 
-        self.normal_centerx = self.rect.centerx
-        self.active_beam_effect = None
+        self.x = float(self.rect.x)
+        self.y = float(self.rect.y)
 
-        self.speed = 6.5
+        self.speed_y = 6.5
+        self.chase_speed = 2.8
         self.scale = scale
 
-        self.uses_beam_attack = random.random() < 0.25
+        self.target = None
+        self.active_beam_effect = None
+
+        self.uses_beam_attack = random.random() < 0.15
         self.beam_attack_started = False
         self.beam_attack_finished = False
-        self.spawn_time = pygame.time.get_ticks()
 
         self.last_shot = pygame.time.get_ticks()
-        self.shoot_delay = 700
+        self.shoot_delay = random.randint(500, 900)
 
-    def update(self, bullet_group, alien_group, beam_effect_group):
-        self.rect.y -= self.speed
+        self.weave_counter = random.uniform(0, math.pi * 2)
+        self.weave_speed = random.uniform(0.05, 0.09)
+
+        self.health = 3
+        self.max_health = 3
+
+        self.combat_state = "pursuing"
+
+        self.damaged = False
+        self.critical = False
+        self.retreating = False
+
+        self.hit_flash_until = 0
+        self.smoke_timer = 0
+        self.smoke_delay = 90
+
+        self.normal_speed_y = self.speed_y
+        self.damaged_speed_y = self.speed_y * 0.62
+        self.critical_speed_y = self.speed_y * 0.34
+
+        self.dodge_chance = 0.70
+        self.dodge_direction = 0
+        self.dodge_timer = 0
+
+    def take_damage(self, amount=1):
+        self.health -= amount
+        self.hit_flash_until = pygame.time.get_ticks() + 120
+
+        if self.health <= 0:
+            self.health = 0
+            self.combat_state = "destroyed"
+            return
+
+        if self.health == 1:
+            self.critical = True
+            self.damaged = True
+            self.retreating = True
+            self.combat_state = "retreating"
+            self.speed_y = self.critical_speed_y
+
+        elif self.health == 2:
+            self.damaged = True
+            self.combat_state = "damaged"
+            self.speed_y = self.damaged_speed_y
+
+    def choose_target(self, alien_group):
+        living_aliens = [
+            alien
+            for alien in alien_group
+            if alien.alive()
+        ]
+
+        if not living_aliens:
+            self.target = None
+            return
+
+        self.target = min(
+            living_aliens,
+            key=lambda alien: (
+                alien.rect.centerx - self.rect.centerx
+            ) ** 2 + (
+                alien.rect.centery - self.rect.centery
+            ) ** 2
+        )
+
+    def update(
+            self,
+            bullet_group,
+            alien_group,
+            beam_effect_group,
+            alien_bullet_group,
+            smoke_group,
+            explosion_group
+    ):
         current_time = pygame.time.get_ticks()
 
+        if self.damaged:
+            if current_time - self.smoke_timer >= self.smoke_delay:
+                smoke = BackgroundSmoke(
+                    self.rect.centerx,
+                    self.rect.bottom,
+                    self.scale
+                )
+
+                smoke_group.add(smoke)
+                self.smoke_timer = current_time
+
+                if self.critical:
+                    self.smoke_delay = random.randint(45, 75)
+                else:
+                    self.smoke_delay = random.randint(80, 130)
+
+        if self.health <= 0:
+            explosion = BackgroundExplosion(
+                self.rect.centerx,
+                self.rect.centery
+            )
+
+            explosion_group.add(explosion)
+            self.kill()
+            return
+
+        if self.dodge_timer > 0:
+            self.x += self.dodge_direction * 6
+            self.dodge_timer -= 1
+
+            if self.dodge_timer == 0:
+                self.combat_state = (
+                    "retreating"
+                    if self.retreating
+                    else "pursuing"
+                )
+
+        elif not self.critical:
+            threatening_bullets = [
+                bullet
+                for bullet in alien_bullet_group
+                if (
+                        bullet.rect.centery < self.rect.centery
+                        and abs(
+                    bullet.rect.centerx
+                    - self.rect.centerx
+                ) < 45
+                        and self.rect.centery
+                        - bullet.rect.centery < 180
+                )
+            ]
+
+            if (
+                    threatening_bullets
+                    and random.random() < self.dodge_chance
+            ):
+                nearest_bullet = min(
+                    threatening_bullets,
+                    key=lambda bullet:
+                    abs(
+                        bullet.rect.centery
+                        - self.rect.centery
+                    )
+                )
+
+                if nearest_bullet.rect.centerx < self.rect.centerx:
+                    self.dodge_direction = 1
+                else:
+                    self.dodge_direction = -1
+
+                self.dodge_timer = random.randint(8, 14)
+                self.combat_state = "dodging"
+
         if (
-            self.uses_beam_attack
-            and not self.beam_attack_started
-            and alien_group
-            and self.rect.top < pygame.display.get_surface().get_height() - 140
+            self.target is None
+            or not self.target.alive()
         ):
-            beam_effect = BackgroundBeamEffect(self, self.scale)
-            beam_effect.start_time = pygame.time.get_ticks()
+            self.choose_target(alien_group)
+
+        self.y -= self.speed_y
+
+        if self.target:
+            distance_x = (
+                self.target.rect.centerx
+                - self.rect.centerx
+            )
+
+            if abs(distance_x) > 8:
+                if distance_x > 0:
+                    self.x += self.chase_speed
+                else:
+                    self.x -= self.chase_speed
+
+            self.weave_counter += self.weave_speed
+            self.x += math.sin(self.weave_counter) * 0.8
+
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        screen_width = pygame.display.get_surface().get_width()
+
+        if self.rect.left < 20:
+            self.rect.left = 20
+            self.x = float(self.rect.x)
+
+        if self.rect.right > screen_width - 20:
+            self.rect.right = screen_width - 20
+            self.x = float(self.rect.x)
+
+        if (
+            self.target
+            and self.uses_beam_attack
+            and not self.beam_attack_started
+            and self.rect.top
+            < pygame.display.get_surface().get_height() - 140
+        ):
+            beam_effect = BackgroundBeamEffect(
+                self,
+                self.scale
+            )
+
             beam_effect_group.add(beam_effect)
 
             self.active_beam_effect = beam_effect
             self.beam_attack_started = True
 
         if (
-            alien_group
+            self.target
             and not self.uses_beam_attack
-            and current_time - self.last_shot >= self.shoot_delay
+            and current_time - self.last_shot
+            >= self.shoot_delay
         ):
-            bullet = BackgroundBullet(self.rect.centerx, self.rect.top)
-            bullet_group.add(bullet)
-            self.last_shot = current_time
+            horizontal_difference = abs(
+                self.target.rect.centerx
+                - self.rect.centerx
+            )
 
-        self.rect.centerx = self.normal_centerx
+            if horizontal_difference < 55:
+                bullet = BackgroundBullet(
+                    self.rect.centerx,
+                    self.rect.top
+                )
+
+                bullet_group.add(bullet)
+                self.last_shot = current_time
+                self.shoot_delay = random.randint(500, 900)
 
         if (
             self.active_beam_effect
             and self.active_beam_effect.alive()
             and self.active_beam_effect.phase == "charge"
         ):
-            self.rect.centerx += random.randint(-3, 3)
+            self.rect.x += random.randint(-3, 3)
 
         if self.rect.bottom < 0:
             self.kill()
@@ -326,15 +529,42 @@ class BackgroundAlien(pygame.sprite.Sprite):
             for frame in self.frames
         ]
 
-        self.frame_index = random.randint(0, len(self.frames) - 1)
+        self.frame_index = random.randint(
+            0,
+            len(self.frames) - 1
+        )
+
         self.animation_speed = 0.12
         self.image = self.frames[int(self.frame_index)]
 
         self.rect = self.image.get_rect(center=(x, y))
-        self.speed = 5
-        self.health = random.randint(1, 4)
 
-    def update(self):
+        self.x = float(self.rect.x)
+        self.y = float(self.rect.y)
+
+        self.speed_y = random.uniform(4.7, 5.5)
+        self.evade_speed = random.uniform(2.0, 3.2)
+
+        self.health = random.randint(1, 2)
+
+        self.evade_direction = random.choice([-1, 1])
+        self.evade_timer = random.randint(20, 60)
+
+        self.weave_counter = random.uniform(
+            0,
+            math.pi * 2
+        )
+
+        self.weave_speed = random.uniform(0.06, 0.11)
+
+        self.last_shot = pygame.time.get_ticks()
+        self.shoot_delay = random.randint(800, 1500)
+
+    def update(
+            self,
+            ship_group,
+            alien_bullet_group
+    ):
         self.frame_index += self.animation_speed
 
         if self.frame_index >= len(self.frames):
@@ -345,7 +575,103 @@ class BackgroundAlien(pygame.sprite.Sprite):
         self.image = self.frames[int(self.frame_index)]
         self.rect = self.image.get_rect(center=old_center)
 
-        self.rect.y -= self.speed
+        self.y -= self.speed_y
+
+        nearest_ship = None
+
+        if ship_group:
+            nearest_ship = min(
+                ship_group,
+                key=lambda ship: (
+                    ship.rect.centerx
+                    - self.rect.centerx
+                ) ** 2 + (
+                    ship.rect.centery
+                    - self.rect.centery
+                ) ** 2
+            )
+
+        if nearest_ship:
+            horizontal_distance = (
+                nearest_ship.rect.centerx
+                - self.rect.centerx
+            )
+
+            vertical_distance = abs(
+                nearest_ship.rect.centery
+                - self.rect.centery
+            )
+
+            if vertical_distance < 300:
+                if horizontal_distance > 0:
+                    self.x -= self.evade_speed
+                else:
+                    self.x += self.evade_speed
+
+        current_time = pygame.time.get_ticks()
+
+        if (
+                nearest_ship
+                and current_time - self.last_shot
+                >= self.shoot_delay
+        ):
+            horizontal_distance = abs(
+                nearest_ship.rect.centerx
+                - self.rect.centerx
+            )
+
+            vertical_distance = abs(
+                nearest_ship.rect.centery
+                - self.rect.centery
+            )
+
+            if (
+                    horizontal_distance < 180
+                    and vertical_distance < 350
+            ):
+                bullet = BackgroundAlienBullet(
+                    self.rect.centerx,
+                    self.rect.bottom,
+                    nearest_ship.rect.centerx,
+                    nearest_ship.rect.centery
+                )
+
+                alien_bullet_group.add(bullet)
+
+                self.last_shot = current_time
+                self.shoot_delay = random.randint(
+                    800,
+                    1500
+                )
+
+        self.evade_timer -= 1
+
+        if self.evade_timer <= 0:
+            self.evade_direction *= -1
+            self.evade_timer = random.randint(20, 60)
+
+        self.weave_counter += self.weave_speed
+
+        self.x += (
+            math.sin(self.weave_counter)
+            * self.evade_direction
+            * 1.3
+        )
+
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        screen_width = pygame.display.get_surface().get_width()
+
+        if self.rect.left < 20:
+            self.rect.left = 20
+            self.x = float(self.rect.x)
+            self.evade_direction = 1
+
+        if self.rect.right > screen_width - 20:
+            self.rect.right = screen_width - 20
+            self.x = float(self.rect.x)
+            self.evade_direction = -1
 
         if self.rect.bottom < 0:
             self.kill()
@@ -354,7 +680,7 @@ class BackgroundBullet(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
 
-        self.image = pygame.Surface((5, 18), pygame.SRCALPHA)
+        self.image = pygame.Surface((4, 8), pygame.SRCALPHA)
         pygame.draw.rect(self.image, (255, 255, 120), self.image.get_rect())
 
         self.rect = self.image.get_rect(center=(x, y))
@@ -364,6 +690,57 @@ class BackgroundBullet(pygame.sprite.Sprite):
         self.rect.y -= self.speed
 
         if self.rect.bottom < 0:
+            self.kill()
+
+class BackgroundAlienBullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, target_x, target_y):
+        super().__init__()
+
+        self.image = pygame.Surface(
+            (4, 8),
+            pygame.SRCALPHA
+        )
+
+        pygame.draw.ellipse(
+            self.image,
+            (255, 90, 90),
+            self.image.get_rect()
+        )
+
+        self.rect = self.image.get_rect(
+            center=(x, y)
+        )
+
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.hypot(dx, dy)
+
+        if distance == 0:
+            distance = 1
+
+        speed = 7
+
+        self.velocity_x = dx / distance * speed
+        self.velocity_y = dy / distance * speed
+
+        self.x = float(self.rect.x)
+        self.y = float(self.rect.y)
+
+    def update(self):
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        screen = pygame.display.get_surface()
+
+        if (
+            self.rect.right < 0
+            or self.rect.left > screen.get_width()
+            or self.rect.bottom < 0
+            or self.rect.top > screen.get_height()
+        ):
             self.kill()
 
 class BackgroundExplosion(pygame.sprite.Sprite):
@@ -393,6 +770,52 @@ class BackgroundExplosion(pygame.sprite.Sprite):
                 self.kill()
             else:
                 self.image = self.frames[self.frame_index]
+
+class BackgroundSmoke(pygame.sprite.Sprite):
+    def __init__(self, x, y, scale=1.0):
+        super().__init__()
+
+        size = max(3, int(8 * scale))
+
+        self.image = pygame.Surface(
+            (size * 2, size * 2),
+            pygame.SRCALPHA
+        )
+
+        pygame.draw.circle(
+            self.image,
+            (125, 125, 125, 150),
+            (size, size),
+            size
+        )
+
+        self.rect = self.image.get_rect(
+            center=(x, y)
+        )
+
+        self.x = float(self.rect.x)
+        self.y = float(self.rect.y)
+
+        self.velocity_x = random.uniform(-0.25, 0.25)
+        self.velocity_y = random.uniform(0.5, 1.1)
+
+        self.alpha = 150
+        self.fade_speed = random.randint(3, 6)
+
+    def update(self):
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        self.alpha -= self.fade_speed
+
+        if self.alpha <= 0:
+            self.kill()
+            return
+
+        self.image.set_alpha(self.alpha)
 
 # --- Spaceship ---
 class Spaceship(pygame.sprite.Sprite):
