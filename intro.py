@@ -1,5 +1,6 @@
 import pygame
 from pygame import mixer
+import math
 #from pygame.locals import *
 import random
 #import time
@@ -137,31 +138,115 @@ def draw_text2(text, size, color, x, y):
 # OBJECTS HERE
 class Intro_Spaceship(pygame.sprite.Sprite):
     def __init__(self, x, y, health):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.image.load("spaceship.png")
-        self.x = x
-        self.y = y
-        self.rect = self.image.get_rect()
-        self.rect.center = [x, y]
+        super().__init__()
+
+        self.image = pygame.image.load(
+            "spaceship.png"
+        ).convert_alpha()
+
+        self.rect = self.image.get_rect(center=(x, y))
+
+        # Floating-point coordinates create smoother movement
+        self.x = float(x)
+        self.y = float(y)
+
         self.health_start = health
         self.health_remaining = health
         self.last_shot = pygame.time.get_ticks()
-        self.counter = 0
-        self.move = True
+
+        # Each ship follows a slightly different position behind the boss
+        self.chase_offset_x = random.randint(-140, 140)
+        self.chase_offset_y = random.randint(90, 170)
+
+        # Gentle independent weaving
+        self.weave_time = random.uniform(0, math.tau)
+        self.weave_speed = random.uniform(0.025, 0.045)
+        self.weave_amount_x = random.randint(10, 25)
+        self.weave_amount_y = random.randint(5, 14)
+
+        # Slightly different speed for every ship
+        self.base_speed = random.uniform(2.0, 2.8)
+        self.current_speed = self.base_speed
+
+        # Prevent abrupt changes in direction
+        self.velocity_x = 0.0
+        self.velocity_y = -self.base_speed
+
+        # Different response speed for each pilot
+        self.steering_strength = random.uniform(0.035, 0.06)
 
     def update(self):
-        self.rect.centery -= 4
+        print("Intro_Spaceship update running")
+        self.rect.x += 100
 
-        if self.rect.centery < border:
-            self.counter += 1
+        self.weave_time += self.weave_speed
 
-            if self.counter >= 45:
+        # Point behind the boss that this ship tries to occupy
+        target_x = intro_boss.rect.centerx + self.chase_offset_x
+        target_y = intro_boss.rect.centery + self.chase_offset_y
 
-                self.rect.centery += speed
+        # Stronger side-to-side pursuit movement
+        target_x += math.sin(self.weave_time) * self.weave_amount_x
+
+        # Smaller forward-and-back corrections
+        target_y += math.sin(
+            self.weave_time * 0.65
+        ) * self.weave_amount_y
+
+        difference_x = target_x - self.x
+        difference_y = target_y - self.y
+
+        distance = math.hypot(
+            difference_x,
+            difference_y
+        )
+
+        if distance > 200:
+            desired_speed = self.base_speed * 1.8
+        elif distance > 100:
+            desired_speed = self.base_speed * 1.3
         else:
-            self.counter = 0
+            desired_speed = self.base_speed * 0.8
 
-        key = pygame.key.get_pressed()
+        if distance > 0:
+            desired_velocity_x = (
+                                         difference_x / distance
+                                 ) * desired_speed
+
+            desired_velocity_y = (
+                                         difference_y / distance
+                                 ) * desired_speed
+
+            self.velocity_x += (
+                                       desired_velocity_x - self.velocity_x
+                               ) * 0.08
+
+            self.velocity_y += (
+                                       desired_velocity_y - self.velocity_y
+                               ) * 0.08
+
+        # Add an independent banking drift.
+        # This prevents the ship from merely following a straight target line.
+        self.velocity_x += (
+                math.sin(self.weave_time * 1.4)
+                * 0.12
+        )
+
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+
+        self.rect.center = (
+            round(self.x),
+            round(self.y)
+        )
+
+        if (
+                self.rect.right < -200
+                or self.rect.left > screen_width + 200
+                or self.rect.bottom < -250
+                or self.rect.top > screen_height + 250
+        ):
+            self.kill()
 
 class Intro_Boss(pygame.sprite.Sprite):
     def __init__(self, x, y, health):
@@ -214,10 +299,17 @@ def show_start_screen():
 # loop For Start Screen
 def wait_for_key():
     waiting = True
+
     while waiting:
-        #update2 add Move the display background logic
-        draw_bg()
-        moving_screen()
+        dt = clock.tick(fps) / 1000
+
+        for star in stars:
+            star.update(dt)
+
+        win.fill((4, 6, 16))
+
+        for star in stars:
+            star.draw(win)
 
 
         intro_spaceship_group.add(intro_spaceship, intro_spaceship2, intro_spaceship3)
@@ -235,7 +327,6 @@ def wait_for_key():
         intro_spaceship_group.draw(win)
         intro_boss_group.draw(win)
         pygame.display.update()
-        clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit()

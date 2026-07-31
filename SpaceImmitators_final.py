@@ -18,7 +18,7 @@ mixer.init()
 
 from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
 from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion, BackgroundAlienBullet)
-from effects import Explosion, RadiatingExplosion, Thrust
+from effects import Explosion, RadiatingExplosion, Thrust, Star
 
 
 
@@ -152,6 +152,12 @@ missileup = [miss1, miss1, miss1, miss2, miss3, miss4, miss5, miss6, miss7, miss
 
 upgrade_missile = miss1
 
+PLAYER_MISSILE_SIZE = (8, 22)
+
+player_missile_image = pygame.transform.smoothscale(
+    upgrade_missile,
+    PLAYER_MISSILE_SIZE
+)
 sprite_sheet2 = SpriteSheet(sprite_sheet_image2)
 
 # jet thrusters for boss-------------------------------------------------------------------------------------
@@ -269,6 +275,61 @@ def draw_player_charge_effect():
             )
         )
 
+def draw_player_missiles():
+    if spaceship.missiles_remaining <= 0:
+        return
+
+    mounted_missile = player_missile_image
+
+    mounted_missile = pygame.transform.rotate(
+        mounted_missile,
+        spaceship.angle
+    )
+
+    missile_mounts = spaceship.get_missile_mounts()
+
+    for mount_index in range(
+            spaceship.next_missile_mount,
+            len(missile_mounts)
+    ):
+        mount_x, mount_y = missile_mounts[mount_index]
+
+        missile_rect = mounted_missile.get_rect(
+            center=(
+                int(mount_x),
+                int(mount_y)
+            )
+        )
+
+        win.blit(mounted_missile, missile_rect)
+
+def draw_intro_missiles(ship_image, ship_rect):
+    ship_width = ship_image.get_width()
+    ship_height = ship_image.get_height()
+
+    local_mounts = [
+        # Inside missiles
+        (-ship_width * 0.23, ship_height * 0.00),
+        (ship_width * 0.23, ship_height * 0.00),
+
+        # Outside missiles
+        (-ship_width * 0.40, ship_height * 0.05),
+        (ship_width * 0.40, ship_height * 0.05)
+    ]
+
+    for offset_x, offset_y in local_mounts:
+        mount_x = ship_rect.centerx + offset_x
+        mount_y = ship_rect.centery + offset_y
+
+        missile_rect = player_missile_image.get_rect(
+            center=(
+                int(mount_x),
+                int(mount_y)
+            )
+        )
+
+        win.blit(player_missile_image, missile_rect)
+
 def pause():
     paused = True
 
@@ -341,37 +402,73 @@ def show_start_screen():
 # loop For Start Screen
 def wait_for_key():
     waiting = True
+
+    intro_spaceship_group.add(
+        intro_spaceship,
+        intro_spaceship2,
+        intro_spaceship3
+    )
+
+    intro_boss_group.add(intro_boss)
+
     while waiting:
-        # update2 add Move the display background logic
-        moving_screen()
-        intro_spaceship_group.add(intro_spaceship, intro_spaceship2, intro_spaceship3)
-        intro_boss_group.add(intro_boss)
-        # Call animate_text() to get the current animated size
-        animated_size = animate_text()
+        dt = clock.tick(fps) / 1000
 
-        # Draw the animated text with the new size
-        draw_text2("SPACEIMITATORS!!!", animated_size, green, screen_width / 2, screen_height / 4)
-        # draw_text2("<  or  > to move, Spacebar to fire", 22, green, screen_width / 2, screen_height / 3)
-        if intro_spaceship2.rect.centery < 600:
-            draw_text2("Press any key", 22, green, screen_width / 2, screen_height - 150)
-
-        # update
-        intro_spaceship_group.update()
-        intro_boss_group.update()
-
-        # Draw
-        intro_spaceship_group.draw(win)
-        intro_boss_group.draw(win)
-        pygame.display.update()
-        clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                pygame.quit()
                 sys.exit()
-                pygame.QUIT
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     waiting = False
+
+        # Update the stars
+        for star in stars:
+            star.update(dt)
+
+        # Erase the previous frame
+        win.fill((4, 6, 16))
+
+        # Draw the starfield
+        for star in stars:
+            star.draw(win)
+
+        # Update intro ships
+        intro_spaceship_group.update()
+        intro_boss_group.update()
+
+        # Animate and draw the title
+        animated_size = animate_text()
+
+        draw_text2(
+            "SPACEIMITATORS!!!",
+            animated_size,
+            green,
+            screen_width / 2,
+            screen_height / 4
+        )
+
+        if intro_spaceship2.rect.centery < 600:
+            draw_text2(
+                "Press any key",
+                22,
+                green,
+                screen_width / 2,
+                screen_height - 150
+            )
+
+        # Draw missiles beneath the main intro ship
+        draw_intro_missiles(
+            intro_spaceship.image,
+            intro_spaceship.rect
+        )
+
+        # Draw ships over the missiles
+        intro_spaceship_group.draw(win)
+        intro_boss_group.draw(win)
+
+        pygame.display.update()
 
 # Game Over function
 def show_go_screen():
@@ -380,9 +477,23 @@ def show_go_screen():
     rate = 1
 
     while waiting:
+        dt = clock.tick(fps) / 1000
 
-        moving_screen()
-        draw_text2("GAME OVER!!!", 68 + change, red, screen_width / 2, screen_height / 4)
+        for star in stars:
+            star.update(dt)
+
+        win.fill((4, 6, 16))
+
+        for star in stars:
+            star.draw(win)
+
+        draw_text2(
+            "GAME OVER!!!",
+            68 + change,
+            red,
+            screen_width / 2,
+            screen_height / 4
+        )
         change += rate
         if change >= 45:
             rate *= -1
@@ -392,7 +503,6 @@ def show_go_screen():
         draw_text2(saying, 22, red, screen_width / 2, screen_height / 2)
         draw_text2("Press Any Key to Play Again", 22, red, screen_width / 2, screen_height * 3 / 4)
         pygame.display.update()
-        clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -671,15 +781,24 @@ def handle_events():
     if (
             keys[pygame.K_a]
             and not spaceship.charging
+            and spaceship.missiles_remaining > 0
             and time_now - spaceship.last_missile_shot > 750
     ):
+        missile_mounts = spaceship.get_missile_mounts()
+
+        mount_index = spaceship.next_missile_mount
+        mount_x, mount_y = missile_mounts[mount_index]
+
         missile = Missiles(
-            spaceship.rect.centerx,
-            spaceship.rect.top,
-            upgrade_missile
+            int(mount_x),
+            int(mount_y),
+            player_missile_image
         )
 
         missile_group.add(missile)
+
+        spaceship.missiles_remaining -= 1
+        spaceship.next_missile_mount += 1
         spaceship.last_missile_shot = time_now
 
     # --- Charge shot ---
@@ -849,6 +968,11 @@ background_beam_effect_group = pygame.sprite.Group()
 background_explosion_group = pygame.sprite.Group()
 background_alien_bullet_group = pygame.sprite.Group()
 background_smoke_group = pygame.sprite.Group()
+
+stars = [
+    Star(screen_width, screen_height)
+    for _ in range(150)
+]
 # mini_shield_group = pygame.sprite.Group()
 
 import sprites
@@ -942,6 +1066,8 @@ while run:
         spaceship_group.empty()
         spaceship_group.add(spaceship)
         spaceship.health_remaining = spaceship.health_start
+        spaceship.missiles_remaining = 4
+        spaceship.next_missile_mount = 0
 
         # Reset sprite groups (just clear them)
         bullets_group.empty()
@@ -959,8 +1085,10 @@ while run:
         # Reset counters
         move_counter = 0
 
-    clock.tick(fps)
+    dt = clock.tick(fps) / 1000
     key = pygame.key.get_pressed()
+    for star in stars:
+        star.update(dt)
 
     # record current time
     time_now = pygame.time.get_ticks()
@@ -1007,8 +1135,12 @@ while run:
     if paused:
         continue  # skip rest of loop until unpaused
 
-    draw_bg()
-    moving_screen()
+    #draw_bg()
+    win.fill((4, 6, 16))
+
+    for star in stars:
+        star.draw(win)
+
     draw_player_charge_effect()
 
     # Keeping track of counts tools
@@ -1100,15 +1232,11 @@ while run:
         background_alien_bullet_group
     )
     background_alien_bullet_group.update()
-    background_ship_hits = pygame.sprite.groupcollide(
-        background_ship_group,
-        background_alien_bullet_group,
-        False,
-        True
-    )
 
-    for ship, bullets in background_ship_hits.items():
-        ship.take_damage(len(bullets))
+
+
+
+
     background_explosion_group.update()
     background_hits = pygame.sprite.groupcollide(background_alien_group, background_bullet_group, False, True)
 
@@ -1138,18 +1266,31 @@ while run:
     background_smoke_group.update()
     explosion_group.update()
     missile_group.update()
+    background_ship_hits = pygame.sprite.groupcollide(
+        background_ship_group,
+        background_alien_bullet_group,
+        False,
+        True
+    )
 
+    for ship, bullets in background_ship_hits.items():
+        ship.take_damage(len(bullets))
 
-    # Draw.....................................
-    # win.blit(thrust1, (350, 250))
-    # Draw.....................................
-    # win.blit(thrust1, (350, 250))
     background_smoke_group.update()
+
+
+    # Draw.....................................
+    # win.blit(thrust1, (350, 250))
+    # Draw.....................................
+    # win.blit(thrust1, (350, 250))
+
+    background_smoke_group.draw(win)
     background_ship_group.draw(win)
     background_alien_group.draw(win)
     background_bullet_group.draw(win)
     background_beam_effect_group.draw(win)
     background_explosion_group.draw(win)
+    draw_player_missiles()
     spaceship_group.draw(win)
     if post_boss_transition and not game_over:
         screen_blink()

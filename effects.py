@@ -1,5 +1,7 @@
 # effects.py
 import pygame
+import random
+import math
 from assets import EXPLOSION_FRAMES, black
 
 from assets import EXPLOSION_FRAMES
@@ -107,6 +109,41 @@ class RadiatingExplosion(pygame.sprite.Sprite):
 
         for group in [bullets_group, alien_bullet_group, boss_bullet_group]:
             pygame.sprite.spritecollide(self, group, True, pygame.sprite.collide_mask)
+
+class Star:
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+
+        self.reset(random.randint(0, screen_height))
+
+    def reset(self, y=None):
+        if y is None:
+            y = random.randint(-100, -10)
+
+        self.x = random.randint(0, self.screen_width)
+        self.y = y
+
+        self.depth = random.uniform(0.25, 1.0)
+        self.speed = 40 + self.depth * 170
+        self.size = max(1, int(self.depth * 3))
+
+    def update(self, dt):
+        self.y += self.speed * dt
+
+        if self.y > self.screen_height + 10:
+            self.reset()
+
+    def draw(self, surface):
+        brightness = int(100 + self.depth * 155)
+        color = (brightness, brightness, brightness)
+
+        pygame.draw.circle(
+            surface,
+            color,
+            (int(self.x), int(self.y)),
+            self.size
+        )
 
 
 # --- Thrust ---

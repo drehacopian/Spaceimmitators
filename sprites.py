@@ -775,7 +775,7 @@ class BackgroundSmoke(pygame.sprite.Sprite):
     def __init__(self, x, y, scale=1.0):
         super().__init__()
 
-        size = max(3, int(8 * scale))
+        size = 10
 
         self.image = pygame.Surface(
             (size * 2, size * 2),
@@ -784,7 +784,7 @@ class BackgroundSmoke(pygame.sprite.Sprite):
 
         pygame.draw.circle(
             self.image,
-            (125, 125, 125, 150),
+            (180, 180, 180, 230),
             (size, size),
             size
         )
@@ -800,7 +800,7 @@ class BackgroundSmoke(pygame.sprite.Sprite):
         self.velocity_y = random.uniform(0.5, 1.1)
 
         self.alpha = 150
-        self.fade_speed = random.randint(3, 6)
+        self.fade_speed = 2
 
     def update(self):
         self.x += self.velocity_x
@@ -829,12 +829,58 @@ class Spaceship(pygame.sprite.Sprite):
         self.health_remaining = health
         self.last_shot = pygame.time.get_ticks()
         self.last_missile_shot = pygame.time.get_ticks()
+        self.missiles_remaining = 4
+        self.next_missile_mount = 0
         self.last_charge_shot = pygame.time.get_ticks()
         self.charge_counter = 0
         self.charging = False
         self.charge_fired = False
         self.charge_start_y = y
         self.charge_start_x = x
+
+    def get_missile_mounts(self):
+        ship_width = self.image_orig.get_width()
+        ship_height = self.image_orig.get_height()
+
+        local_mounts = [
+            # Left inside
+            (-ship_width * 0.23, ship_height * 0.00),
+
+            # Right inside
+            (ship_width * 0.23, ship_height * 0.00),
+
+            # Left outside
+            (-ship_width * 0.40, ship_height * 0.05),
+
+            # Right outside
+            (ship_width * 0.40, ship_height * 0.05)
+        ]
+
+        angle_radians = math.radians(self.angle)
+        cosine = math.cos(angle_radians)
+        sine = math.sin(angle_radians)
+
+        mounts = []
+
+        for offset_x, offset_y in local_mounts:
+            rotated_x = (
+                    offset_x * cosine
+                    + offset_y * sine
+            )
+
+            rotated_y = (
+                    -offset_x * sine
+                    + offset_y * cosine
+            )
+
+            mounts.append(
+                (
+                    self.rect.centerx + rotated_x,
+                    self.rect.centery + rotated_y
+                )
+            )
+
+        return mounts
 
     def rotate(self, angle):
         self.angle += angle
@@ -1049,7 +1095,9 @@ class Missiles(pygame.sprite.Sprite):
         super().__init__()
 
         self.image = image.copy()
-        self.rect = self.image.get_rect(midbottom=(x, y))
+        self.rect = self.image.get_rect(
+            center=(x, y)
+        )
         self.speed = speed
 
     def update(self):
