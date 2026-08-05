@@ -17,7 +17,7 @@ mixer.init()
 
 
 from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
-from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion, BackgroundAlienBullet)
+from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion, BackgroundAlienBullet, ShipDebris)
 from effects import Explosion, RadiatingExplosion, Thrust, Star
 
 
@@ -292,6 +292,12 @@ def draw_player_missiles():
             spaceship.next_missile_mount,
             len(missile_mounts)
     ):
+
+        if not spaceship.missile_mount_available(
+                mount_index
+        ):
+            continue
+
         mount_x, mount_y = missile_mounts[mount_index]
 
         missile_rect = mounted_missile.get_rect(
@@ -655,6 +661,32 @@ def handle_events():
     # Continuous key holds
     keys = pygame.key.get_pressed()
 
+    # --- Test red ship wing sweep ---
+    if keys[pygame.K_LEFTBRACKET]:
+        spaceship.wing_sweep -= 1
+
+    if keys[pygame.K_RIGHTBRACKET]:
+        spaceship.wing_sweep += 1
+
+    # --- Test breaking off left sweep wing ---
+    if keys[pygame.K_1]:
+        spaceship.detach_part(
+            "sweep_left_wing",
+            ship_debris_group
+        )
+
+    # --- Test breaking off right sweep wing ---
+    if keys[pygame.K_2]:
+        spaceship.detach_part(
+            "sweep_right_wing",
+            ship_debris_group
+        )
+
+    spaceship.wing_sweep = max(
+        -30,
+        min(30, spaceship.wing_sweep)
+    )
+
     # --- Hold C to charge ---
     if keys[pygame.K_c]:
 
@@ -738,26 +770,26 @@ def handle_events():
         spaceship.charge_counter = 0
         spaceship.charge_fired = False
 
-    # --- Rotation ---
-    if keys[pygame.K_z]:
-        spaceship.rotate(2)
-        angle -= 2
-        ship_angle += 2
+    # --- Rotation --- took out -------------------------------
+    #if keys[pygame.K_z]:
+        #spaceship.rotate(2)
+        #angle -= 2
+        #ship_angle += 2
 
-    if keys[pygame.K_x]:
-        spaceship.rotate(-2)
-        angle += 2
-        ship_angle -= 2
+    #if keys[pygame.K_x]:
+        #spaceship.rotate(-2)
+        #angle += 2
+        #ship_angle -= 2
 
 
     # --- Movement is disabled while charging ---
     if not spaceship.charging:
 
         if keys[pygame.K_LEFT] and spaceship.rect.left > 0:
-            spaceship.rect.x -= 5
+            spaceship.rect.x -= 5 * spaceship.get_turn_strength("left")
 
         if keys[pygame.K_RIGHT] and spaceship.rect.right < screen_width:
-            spaceship.rect.x += 5
+            spaceship.rect.x += 5 * spaceship.get_turn_strength("right")
 
         if keys[pygame.K_UP] and spaceship.rect.top > 0:
             spaceship.rect.y -= 5
@@ -787,19 +819,31 @@ def handle_events():
         missile_mounts = spaceship.get_missile_mounts()
 
         mount_index = spaceship.next_missile_mount
-        mount_x, mount_y = missile_mounts[mount_index]
 
-        missile = Missiles(
-            int(mount_x),
-            int(mount_y),
-            player_missile_image
+        # Skip missile mounts that were lost with a wing
+        while (
+                mount_index < len(missile_mounts)
+                and not spaceship.missile_mount_available(
+            mount_index
         )
+        ):
+            mount_index += 1
 
-        missile_group.add(missile)
+        # Fire only if a physical missile mount still exists
+        if mount_index < len(missile_mounts):
+            mount_x, mount_y = missile_mounts[mount_index]
 
-        spaceship.missiles_remaining -= 1
-        spaceship.next_missile_mount += 1
-        spaceship.last_missile_shot = time_now
+            missile = Missiles(
+                int(mount_x),
+                int(mount_y),
+                player_missile_image
+            )
+
+            missile_group.add(missile)
+
+            spaceship.missiles_remaining -= 1
+            spaceship.next_missile_mount = mount_index + 1
+            spaceship.last_missile_shot = time_now
 
     # --- Charge shot ---
 
@@ -957,6 +1001,7 @@ explosion_group = pygame.sprite.Group()
 shield_group = pygame.sprite.Group()
 missile_group = pygame.sprite.Group()
 Charge_Shot_group = pygame.sprite.Group()
+ship_debris_group = pygame.sprite.Group()
 charge_trail_group = pygame.sprite.Group()
 thrust_group = pygame.sprite.Group()
 intro_spaceship_group = pygame.sprite.Group()
@@ -982,6 +1027,7 @@ sprites.alien_group = alien_group
 sprites.boss_group = boss_group
 sprites.shield_group = shield_group
 sprites.explosion_group = explosion_group
+sprites.ship_debris_group = ship_debris_group
 sprites.bullets_group = bullets_group
 sprites.alien_bullet_group = alien_bullet_group
 sprites.boss_bullet_group = boss_bullet_group
@@ -1265,6 +1311,7 @@ while run:
     boss_bullet_group.update()
     background_smoke_group.update()
     explosion_group.update()
+    ship_debris_group.update()
     missile_group.update()
     background_ship_hits = pygame.sprite.groupcollide(
         background_ship_group,
@@ -1292,6 +1339,7 @@ while run:
     background_explosion_group.draw(win)
     draw_player_missiles()
     spaceship_group.draw(win)
+    ship_debris_group.draw(win)
     if post_boss_transition and not game_over:
         screen_blink()
 

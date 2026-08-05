@@ -3,7 +3,7 @@ import pygame
 import math, random
 from assets import (
     ships, alien_images, boss_image, low_health_boss_image,
-    shield_image, small_shield_image
+    shield_image, small_shield_image, red_ship_layers, red_ship_layer_order
 )
 from assets import explosion_fx, explosion2_fx  # sounds for collisions
 #from effects import Explosion  # you’ll move Explosion later in Step 3
@@ -23,6 +23,7 @@ alien_group = None
 shield_group = None
 boss_group = None
 boss = None
+ship_debris_group = None
 bullets_group = None
 alien_bullet_group = None
 boss_bullet_group = None
@@ -817,6 +818,178 @@ class BackgroundSmoke(pygame.sprite.Sprite):
 
         self.image.set_alpha(self.alpha)
 
+class ShipDebris(pygame.sprite.Sprite):
+    def __init__(self, image, x, y, starting_angle=0):
+        super().__init__()
+
+        self.original_image = image.copy()
+        self.image = pygame.transform.rotate(
+            self.original_image,
+            starting_angle
+        )
+
+        self.rect = self.image.get_rect(
+            center=(x, y)
+        )
+
+        self.x = float(self.rect.centerx)
+        self.y = float(self.rect.centery)
+
+        # Random direction and speed
+        self.velocity_x = random.uniform(-5.0, 5.0)
+        self.velocity_y = random.uniform(-4.0, 3.0)
+
+        # Random spin
+        self.angle = starting_angle
+        self.rotation_speed = random.uniform(-12, 12)
+
+        # Prevent almost-zero rotation
+        if -2 < self.rotation_speed < 2:
+            self.rotation_speed = random.choice([-5, 5])
+
+        # Random time before exploding
+        self.explode_time = (
+            pygame.time.get_ticks()
+            + random.randint(700, 1800)
+        )
+
+    def damage_part_at_point(
+            self,
+            hit_x,
+            hit_y,
+            damage,
+            debris_group
+    ):
+        if self.ship_number != 0:
+            return
+
+        # Convert screen position into position
+        # inside the 154 x 80 red ship canvas.
+        local_x = hit_x - self.rect.left
+        local_y = hit_y - self.rect.top
+
+        part_name = None
+
+        # Small left sweep wing
+        if (
+                30 <= local_x <= 72
+                and 28 <= local_y <= 62
+        ):
+            part_name = "sweep_left_wing"
+
+        # Small right sweep wing
+        elif (
+                82 <= local_x <= 124
+                and 28 <= local_y <= 62
+        ):
+            part_name = "sweep_right_wing"
+
+        if part_name is None:
+            return
+
+        part = self.ship_parts[part_name]
+
+        if not part["attached"]:
+            return
+
+        part["health"] -= damage
+
+        print(
+            part_name,
+            "health:",
+            part["health"]
+        )
+
+        if part["health"] <= 0:
+            self.detach_part(
+                part_name,
+                debris_group
+            )
+    def detach_part(self, part_name, debris_group):
+        if self.ship_number != 0:
+            return
+
+        part = self.ship_parts.get(part_name)
+
+        if part is None:
+            return
+
+        if not part["attached"]:
+            return
+
+        layer_index = part["layer"]
+
+        # Default values for ordinary parts
+        debris_x = self.rect.centerx
+        debris_y = self.rect.centery
+        starting_angle = 0
+
+        # Small left sweep wing
+        if part_name == "sweep_left_wing":
+            debris_x = self.rect.left + 72
+            debris_y = (
+                    self.rect.top
+                    + 47
+                    + self.wing_offset_y
+            )
+
+            starting_angle = self.wing_sweep
+
+        # Small right sweep wing
+        elif part_name == "sweep_right_wing":
+            debris_x = self.rect.left + 82
+            debris_y = (
+                    self.rect.top
+                    + 47
+                    + self.wing_offset_y
+            )
+
+            starting_angle = -self.wing_sweep
+
+        part["attached"] = False
+
+        debris = ShipDebris(
+            self.ship_layers[layer_index],
+            debris_x,
+            debris_y,
+            starting_angle
+        )
+
+        debris_group.add(debris)
+
+        self.rebuild_layered_ship()
+
+    def update(self):
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+
+        self.angle += self.rotation_speed
+
+        self.image = pygame.transform.rotate(
+            self.original_image,
+            self.angle
+        )
+
+        self.rect = self.image.get_rect(
+            center=(
+                int(self.x),
+                int(self.y)
+            )
+        )
+
+        if pygame.time.get_ticks() >= self.explode_time:
+            explosion = Explosion(
+                self.rect.centerx,
+                self.rect.centery,
+                2
+            )
+
+            explosion_group.add(explosion)
+
+            explosion_fx.play()
+
+            self.kill()
+
 # --- Spaceship ---
 class Spaceship(pygame.sprite.Sprite):
     def __init__(self, x, y, health, ship):
@@ -824,6 +997,85 @@ class Spaceship(pygame.sprite.Sprite):
         self.image_orig = ships[ship]
         self.image = self.image_orig
         self.rect = self.image.get_rect(center=(x, y))
+        self.ship_number = ship
+        # Variable-geometry wing angle for red ship
+        self.wing_sweep = 0
+        self.wing_offset_y = -4
+
+        # Individual layered parts for the red ship only.
+        # Other ships continue using their normal single image.
+        if self.ship_number == 0:
+            self.ship_layers = [
+                layer.copy()
+                for layer in red_ship_layers
+            ]
+
+            self.ship_layer_order = red_ship_layer_order.copy()
+            self.ship_parts = {
+                "part_1": {
+                    "layer": 0,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "part_2": {
+                    "layer": 1,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "rear_left_wing": {
+                    "layer": 2,
+                    "attached": True,
+                    "health": 3
+                },
+
+                "rear_right_wing": {
+                    "layer": 3,
+                    "attached": True,
+                    "health": 3
+                },
+
+                "sweep_left_wing": {
+                    "layer": 4,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "sweep_right_wing": {
+                    "layer": 5,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "part_7": {
+                    "layer": 6,
+                    "attached": True,
+                    "health": 3
+                },
+
+                "rocket": {
+                    "layer": 7,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "part_9": {
+                    "layer": 8,
+                    "attached": True,
+                    "health": 2
+                },
+
+                "part_10": {
+                    "layer": 9,
+                    "attached": True,
+                    "health": 2
+                }
+            }
+
+        else:
+            self.ship_layers = None
+            self.ship_layer_order = None
         self.angle = 0
         self.health_start = health
         self.health_remaining = health
@@ -844,16 +1096,16 @@ class Spaceship(pygame.sprite.Sprite):
 
         local_mounts = [
             # Left inside
-            (-ship_width * 0.23, ship_height * 0.00),
+            (-ship_width * 0.11, ship_height * -0.02),
 
             # Right inside
-            (ship_width * 0.23, ship_height * 0.00),
+            (ship_width * 0.11, ship_height * -0.02),
 
             # Left outside
-            (-ship_width * 0.40, ship_height * 0.05),
+            (-ship_width * 0.18, ship_height * 0.02),
 
             # Right outside
-            (ship_width * 0.40, ship_height * 0.05)
+            (ship_width * 0.18, ship_height * 0.02)
         ]
 
         angle_radians = math.radians(self.angle)
@@ -882,12 +1134,247 @@ class Spaceship(pygame.sprite.Sprite):
 
         return mounts
 
+    def draw_rotated_ship_part(
+            self,
+            surface,
+            layer_image,
+            pivot,
+            angle,offset_y=0
+    ):
+        rotated_image = pygame.transform.rotate(
+            layer_image,
+            angle
+        )
+
+        original_center = pygame.math.Vector2(
+            layer_image.get_rect().center
+        )
+
+        pivot_vector = (
+            pygame.math.Vector2(pivot)
+            - original_center
+        )
+
+        rotated_pivot_vector = pivot_vector.rotate(-angle)
+
+        rotated_center = (
+            pygame.math.Vector2(pivot)
+            - rotated_pivot_vector
+        )
+
+        rotated_rect = rotated_image.get_rect(
+            center=(
+                round(rotated_center.x),
+                round(rotated_center.y)
+            )
+        )
+
+        rotated_rect.y += offset_y
+
+        surface.blit(
+            rotated_image,
+            rotated_rect
+        )
+
+    def layer_is_attached(self, layer_index):
+        if self.ship_number != 0:
+            return True
+
+        for part in self.ship_parts.values():
+            if part["layer"] == layer_index:
+                return part["attached"]
+
+        return True
+
+    def rebuild_layered_ship(self):
+        if self.ship_number != 0:
+            return
+
+        layered_image = pygame.Surface(
+            self.image_orig.get_size(),
+            pygame.SRCALPHA
+        )
+
+        for layer_index in self.ship_layer_order:
+
+            if not self.layer_is_attached(layer_index):
+                continue
+
+            # Sprite 5 - small left wing
+            if layer_index == 4:
+                self.draw_rotated_ship_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (72, 47),
+                    self.wing_sweep,
+                    self.wing_offset_y
+                )
+
+            # Sprite 6 - small right wing
+            elif layer_index == 5:
+                self.draw_rotated_ship_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (82, 47),
+                    -self.wing_sweep,
+                    self.wing_offset_y
+                )
+
+            else:
+                layered_image.blit(
+                    self.ship_layers[layer_index],
+                    (0, 0)
+                )
+
+        self.image = layered_image
+
+        old_center = self.rect.center
+
+        self.rect = self.image.get_rect(
+            center=old_center
+        )
+
     def rotate(self, angle):
         self.angle += angle
-        self.image = pygame.transform.rotate(self.image_orig, self.angle)
-        self.rect = self.image.get_rect(center=self.rect.center)
+
+        if self.ship_number == 0:
+            self.rebuild_layered_ship()
+
+        else:
+            self.image = pygame.transform.rotate(
+                self.image_orig,
+                self.angle
+            )
+
+            self.rect = self.image.get_rect(
+                center=self.rect.center
+            )
+
+    def has_part(self, part_name):
+        part = self.ship_parts.get(part_name)
+
+        if part is None:
+            return True
+
+        return part["attached"]
+
+    def missile_mount_available(self, mount_index):
+        if self.ship_number != 0:
+            return True
+
+        # Left-side missiles
+        if mount_index in (0, 2):
+            return self.has_part("sweep_left_wing")
+
+        # Right-side missiles
+        if mount_index in (1, 3):
+            return self.has_part("sweep_right_wing")
+
+        return True
+
+    def get_turn_strength(self, direction):
+        normal_strength = 1.0
+
+        if self.ship_number != 0:
+            return normal_strength
+
+        if (
+                direction == "left"
+                and not self.has_part("sweep_left_wing")
+        ):
+            return 0.45
+
+        if (
+                direction == "right"
+                and not self.has_part("sweep_right_wing")
+        ):
+            return 0.45
+
+        return normal_strength
+
+    def damage_part_at_point(
+            self,
+            hit_x,
+            hit_y,
+            damage,
+            debris_group
+    ):
+        if self.ship_number != 0:
+            return
+
+        local_x = hit_x - self.rect.left
+        local_y = hit_y - self.rect.top
+
+        part_name = None
+
+        # Small left sweep wing
+        if (
+                30 <= local_x <= 72
+                and 28 <= local_y <= 62
+        ):
+            part_name = "sweep_left_wing"
+
+        # Small right sweep wing
+        elif (
+                82 <= local_x <= 124
+                and 28 <= local_y <= 62
+        ):
+            part_name = "sweep_right_wing"
+
+        if part_name is None:
+            return
+
+        part = self.ship_parts[part_name]
+
+        if not part["attached"]:
+            return
+
+        part["health"] -= damage
+
+        print(
+            part_name,
+            "health:",
+            part["health"]
+        )
+
+        if part["health"] <= 0:
+            self.detach_part(
+                part_name,
+                debris_group
+            )
+
+
+
+    def detach_part(self, part_name, debris_group):
+        if self.ship_number != 0:
+            return
+
+        part = self.ship_parts.get(part_name)
+
+        if part is None:
+            return
+
+        if not part["attached"]:
+            return
+
+        part["attached"] = False
+
+        layer_index = part["layer"]
+
+        debris = ShipDebris(
+            self.ship_layers[layer_index],
+            self.rect.centerx,
+            self.rect.centery
+        )
+
+        debris_group.add(debris)
+
+        self.rebuild_layered_ship()
 
     def update(self):
+        if self.ship_number == 0:
+            self.rebuild_layered_ship()
+
         self.mask = pygame.mask.from_surface(self.image)
 
 # --- Aliens ---
@@ -1466,6 +1953,14 @@ class Alien_Bullets(pygame.sprite.Sprite):
             time_last_hit = pygame.time.get_ticks()
             self.kill()
             explosion2_fx.play()
+
+            spaceship.damage_part_at_point(
+                self.rect.centerx,
+                self.rect.centery,
+                1,
+                ship_debris_group
+            )
+
             spaceship.health_remaining -= 1
             explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
             explosion_group.add(explosion)
@@ -1513,6 +2008,12 @@ class Boss_Bullets(pygame.sprite.Sprite):
             time_last_hit = pygame.time.get_ticks()
             self.kill()
             explosion2_fx.play()
+            spaceship.damage_part_at_point(
+                self.rect.centerx,
+                self.rect.centery,
+                2,
+                ship_debris_group
+            )
             spaceship.health_remaining -= 2
             explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
             explosion_group.add(explosion)

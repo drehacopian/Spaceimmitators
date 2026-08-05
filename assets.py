@@ -52,9 +52,67 @@ EXPLOSION_FRAMES = {
     3: [pygame.transform.scale(pygame.image.load(f"exp{n}.png"), (160, 160)) for n in range(1, 6)],
 }
 
+# --- Layered red ship ---
+layered_ship_sheet = pygame.image.load(
+    "spaceship Layered.png"
+)
+
+SHIP_LAYER_WIDTH = 154
+SHIP_LAYER_HEIGHT = 80
+
+red_ship_layers = []
+
+# Red ship is the left column.
+# Use rows 0 through 9.
+# Row 10 is the cockpit escape rocket, so we ignore it for now.
+for row in range(10):
+    layer_rect = pygame.Rect(
+        0,
+        row * SHIP_LAYER_HEIGHT,
+        SHIP_LAYER_WIDTH,
+        SHIP_LAYER_HEIGHT
+    )
+
+    layer_image = layered_ship_sheet.subsurface(
+        layer_rect
+    ).copy()
+
+    red_ship_layers.append(layer_image)
+
+
+# Temporarily assemble all 10 layers into one complete ship.
+# This lets the existing game use it without changing Spaceship yet.
+red_ship_image = pygame.Surface(
+    (SHIP_LAYER_WIDTH, SHIP_LAYER_HEIGHT),
+    pygame.SRCALPHA
+)
+
+# Layer stacking order from bottom to top
+red_ship_layer_order = [
+    7,  # Sprite 8 - rocket, underneath sprite 7
+    6,  # Sprite 7 - above the rocket
+
+    4,  # Sprite 5
+    5,  # Sprite 6
+
+    2,  # Sprite 3 - above sprites 5 and 6
+    3,  # Sprite 4 - above sprites 5 and 6
+
+    0,  # Sprite 1
+    1,  # Sprite 2
+    8,  # Sprite 9
+    9   # Sprite 10
+]
+
+for layer_index in red_ship_layer_order:
+    red_ship_image.blit(
+        red_ship_layers[layer_index],
+        (0, 0)
+    )
+
 # --- Ships, Aliens, Boss, Shields ---
 ships = [
-    pygame.image.load("spaceship.png"),
+    red_ship_image,
     pygame.image.load("spaceship2.png"),
     pygame.image.load("spaceship3.png"),
 ]
