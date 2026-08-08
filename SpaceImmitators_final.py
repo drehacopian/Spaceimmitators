@@ -422,44 +422,35 @@ def draw_escape_thruster():
         180
     )
 
-    # Determine travel direction
-    velocity_x = spaceship.escape_velocity_x
-    velocity_y = spaceship.escape_velocity_y
-
-    angle = math.degrees(
-        math.atan2(
-            -velocity_y,
-            velocity_x
-        )
-    )
-
-    # Flame points opposite the direction of travel
-    rotation = angle - 90
-
+    # Use the exact same rotation as the escape pod.
+    # This keeps the flame locked to the pod instead of
+    # trying to calculate its own slower direction.
     thruster_image = pygame.transform.rotate(
         thruster_image,
-        rotation
+        spaceship.escape_angle
     )
 
-    direction = pygame.math.Vector2(
-        velocity_x,
-        velocity_y
+    # Original ship points upward, so "behind" the pod
+    # starts below it in local coordinates.
+    behind_offset = pygame.math.Vector2(
+        0,
+        38
     )
 
-    if direction.length() == 0:
-        direction = pygame.math.Vector2(0, -1)
+    # Rotate that attachment point by the exact same
+    # angle as the pod.
+    behind_offset = behind_offset.rotate(
+        -spaceship.escape_angle
+    )
 
-    direction = direction.normalize()
-
-    # Put flame behind the escaping craft
     thruster_x = (
-        spaceship.rect.centerx
-        - direction.x * 38
+            spaceship.rect.centerx
+            + behind_offset.x
     )
 
     thruster_y = (
-        spaceship.rect.centery
-        - direction.y * 38
+            spaceship.rect.centery
+            + behind_offset.y
     )
 
     thruster_rect = thruster_image.get_rect(

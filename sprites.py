@@ -1162,8 +1162,16 @@ class Spaceship(pygame.sprite.Sprite):
         self.escape_velocity_y = 0.0
         self.escape_weave = random.uniform(0, math.tau)
 
+        self.escape_angle = 0
+
         self.escape_start_time = 0
         self.escape_delay = 700
+
+        self.escape_route_change_timer = 0
+        self.escape_route_change_delay = random.randint(20, 50)
+
+        self.escape_flight_time = 0
+        self.escape_min_flight_time = 180
 
         # Individual layered parts for the red ship only.
         # Other ships continue using their normal single image.
@@ -1421,9 +1429,18 @@ class Spaceship(pygame.sprite.Sprite):
                     (0, 0)
                 )
 
-        self.image = layered_image
-
         old_center = self.rect.center
+
+        # During escape, rotate the entire surviving assembly
+        if self.escape_mode:
+
+            self.image = pygame.transform.rotate(
+                layered_image,
+                self.escape_angle
+            )
+
+        else:
+            self.image = layered_image
 
         self.rect = self.image.get_rect(
             center=old_center
@@ -1468,36 +1485,100 @@ class Spaceship(pygame.sprite.Sprite):
                 and not self.has_part("sweep_right_wing")
         )
 
-        if escape_parts_lost:
-            self.escape_mode = True
-            self.escape_start_time = pygame.time.get_ticks()
+        if not escape_parts_lost:
+            return False
 
-            self.escape_direction = random.choice([
-                "left",
-                "right",
-                "top"
-            ])
+        self.escape_mode = True
+        self.escape_start_time = pygame.time.get_ticks()
 
-            if self.escape_direction == "left":
-                self.escape_velocity_x = -4.0
-                self.escape_velocity_y = -2.5
+        # --------------------------------------------------
+        # Check whether the space directly above is clear
+        # --------------------------------------------------
 
-            elif self.escape_direction == "right":
-                self.escape_velocity_x = 4.0
-                self.escape_velocity_y = -2.5
+        lane_half_width = 55
 
-            else:
-                self.escape_velocity_x = random.uniform(-1.5, 1.5)
-                self.escape_velocity_y = -5.0
-
-            print(
-                "ESCAPE MODE STARTED:",
-                self.escape_direction
+        aliens_above = [
+            alien
+            for alien in alien_group
+            if (
+                    alien.alive()
+                    and alien.rect.centery < self.rect.centery
+                    and abs(
+                alien.rect.centerx
+                - self.rect.centerx
+            ) < lane_half_width
             )
+        ]
 
-            return True
+        # Straight-up escape is only available
+        # if no alien is occupying the lane above.
+        screen_width = pygame.display.get_surface().get_width()
 
-        return False
+        # Favor crossing the screen so the escape animation
+        # stays visible for a while.
+        if self.rect.centerx < screen_width * 0.40:
+
+            possible_routes = [
+                "right",
+                "upper_right",
+                "upper_right"
+            ]
+
+        elif self.rect.centerx > screen_width * 0.60:
+
+            possible_routes = [
+                "left",
+                "upper_left",
+                "upper_left"
+            ]
+
+        else:
+
+            possible_routes = [
+                "upper_left",
+                "upper_right"
+            ]
+
+        # Straight-up escape is only an option from
+        # roughly the middle of the screen.
+        if (
+                not aliens_above
+                and screen_width * 0.35
+                < self.rect.centerx
+                < screen_width * 0.65
+        ):
+            possible_routes.append("top")
+
+        self.escape_direction = random.choice(
+            possible_routes
+        )
+
+        if self.escape_direction == "left":
+            self.escape_velocity_x = random.uniform(-5.5, -4.0)
+            self.escape_velocity_y = random.uniform(-3.0, -1.5)
+
+        elif self.escape_direction == "right":
+            self.escape_velocity_x = random.uniform(4.0, 5.5)
+            self.escape_velocity_y = random.uniform(-3.0, -1.5)
+
+        elif self.escape_direction == "upper_left":
+            self.escape_velocity_x = random.uniform(-4.0, -2.0)
+            self.escape_velocity_y = random.uniform(-5.5, -3.5)
+
+        elif self.escape_direction == "upper_right":
+            self.escape_velocity_x = random.uniform(2.0, 4.0)
+            self.escape_velocity_y = random.uniform(-5.5, -3.5)
+
+        else:
+            self.escape_velocity_x = random.uniform(-0.8, 0.8)
+            self.escape_velocity_y = random.uniform(-6.0, -4.8)
+
+        print(
+            "ESCAPE MODE STARTED:",
+            self.escape_direction
+        )
+
+        return True
 
     def update_escape(self):
         if not self.escape_mode:
@@ -1510,25 +1591,29 @@ class Spaceship(pygame.sprite.Sprite):
         ):
             return
 
-        # Gentle unpredictable weaving
+        self.escape_flight_time += 1
+
         self.escape_weave += 0.09
 
         weave_x = math.sin(
             self.escape_weave
-        ) * 1.3
+        ) * 1.4
 
         weave_y = math.cos(
             self.escape_weave * 0.7
-        ) * 0.5
+        ) * 0.55
 
-        dodge_x = 0
-        dodge_y = 0
+        dodge_x = 0.0
+        dodge_y = 0.0
 
-        # Avoid ordinary alien bullets
-        threatening_bullets = list(alien_bullet_group)
+        threatening_bullets = (
+                list(alien_bullet_group)
+                + list(boss_bullet_group)
+        )
 
-        # Also avoid boss bullets
-        threatening_bullets += list(boss_bullet_group)
+        # --------------------------------------------------
+        # AGGRESSIVE BULLET AVOIDANCE
+        # --------------------------------------------------
 
         for bullet in threatening_bullets:
 
@@ -1542,46 +1627,131 @@ class Spaceship(pygame.sprite.Sprite):
                     - self.rect.centery
             )
 
-            # Only react to reasonably nearby bullets
+            # Large early-warning area
             if (
-                    abs(distance_x) < 100
-                    and abs(distance_y) < 150
+                    abs(distance_x) < 150
+                    and abs(distance_y) < 220
             ):
 
-                # Dodge away horizontally
+                # Strong sideways dodge
                 if distance_x < 0:
-                    dodge_x += 2.5
+                    dodge_x += 6.0
                 else:
-                    dodge_x -= 2.5
+                    dodge_x -= 6.0
 
-                # Also try to move away vertically
+                # Also move away vertically
                 if distance_y < 0:
-                    dodge_y += 1.0
+                    dodge_y += 2.0
                 else:
-                    dodge_y -= 1.0
+                    dodge_y -= 2.0
 
-        self.rect.x += int(
-            self.escape_velocity_x
-            + weave_x
-            + dodge_x
-        )
+        # --------------------------------------------------
+        # RANDOM ROUTE VARIATION
+        # --------------------------------------------------
 
-        self.rect.y += int(
-            self.escape_velocity_y
-            + weave_y
-            + dodge_y
-        )
+        self.escape_route_change_timer += 1
 
-        screen_width = pygame.display.get_surface().get_width()
-        screen_height = pygame.display.get_surface().get_height()
-
-        # Escape completed
         if (
-                self.rect.right < -40
-                or self.rect.left > screen_width + 40
-                or self.rect.bottom < -40
+                self.escape_route_change_timer
+                >= self.escape_route_change_delay
         ):
-            self.escape_finished = True
+            self.escape_route_change_timer = 0
+
+            self.escape_route_change_delay = random.randint(
+                20,
+                50
+            )
+
+            # Small random course correction
+            self.escape_velocity_x += random.uniform(
+                -1.2,
+                1.2
+            )
+
+            self.escape_velocity_y += random.uniform(
+                -0.6,
+                0.3
+            )
+
+            # Keep it generally escaping upward
+            self.escape_velocity_y = min(
+                self.escape_velocity_y,
+                -1.5
+            )
+
+            self.escape_velocity_x = max(
+                -6.0,
+                min(
+                    6.0,
+                    self.escape_velocity_x
+                )
+            )
+
+        move_x = (
+                self.escape_velocity_x
+                + weave_x
+                + dodge_x
+        )
+
+        move_y = (
+                self.escape_velocity_y
+                + weave_y
+                + dodge_y
+        )
+
+        if move_x != 0 or move_y != 0:
+            travel_angle = math.degrees(
+                math.atan2(
+                    -move_y,
+                    move_x
+                )
+            )
+
+            self.escape_angle = (
+                    travel_angle - 90
+            )
+
+        self.rect.x += int(move_x)
+        self.rect.y += int(move_y)
+
+        screen_width = (
+            pygame.display.get_surface().get_width()
+        )
+
+        # --------------------------------------------------
+        # KEEP POD ON SCREEN FOR FIRST 3 SECONDS
+        # --------------------------------------------------
+
+        if self.escape_flight_time < self.escape_min_flight_time:
+
+            # Hit left side -> turn back toward the right
+            if self.rect.left < 20:
+                self.rect.left = 20
+
+                self.escape_velocity_x = abs(
+                    self.escape_velocity_x
+                )
+
+            # Hit right side -> turn back toward the left
+            if self.rect.right > screen_width - 20:
+                self.rect.right = screen_width - 20
+
+                self.escape_velocity_x = -abs(
+                    self.escape_velocity_x
+                )
+
+        # --------------------------------------------------
+        # AFTER SHOWCASE TIME, POD MAY LEAVE THE SCREEN
+        # --------------------------------------------------
+
+        if self.escape_flight_time >= self.escape_min_flight_time:
+
+            if (
+                    self.rect.right < -40
+                    or self.rect.left > screen_width + 40
+                    or self.rect.bottom < -40
+            ):
+                self.escape_finished = True
 
     def missile_mount_available(self, mount_index):
         if self.ship_number != 0:
@@ -1864,13 +2034,16 @@ class Spaceship(pygame.sprite.Sprite):
         self.check_escape_mode()
 
     def update(self):
-        if self.ship_number == 0:
-            self.rebuild_layered_ship()
 
         if self.escape_mode:
             self.update_escape()
 
-        self.mask = pygame.mask.from_surface(self.image)
+        if self.ship_number == 0:
+            self.rebuild_layered_ship()
+
+        self.mask = pygame.mask.from_surface(
+            self.image
+        )
 
 # --- Aliens ---
 class Aliens(pygame.sprite.Sprite):
@@ -1956,12 +2129,14 @@ class Aliens(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=old_center)
 
         # Simple horizontal movement
-        self.rect.x += self.move_direction
-        self.move_counter += 1
+        # TEMPORARILY DISABLED FOR DAMAGE TESTING
 
-        if abs(self.move_counter) > 75:
-            self.move_direction *= -1
-            self.move_counter *= -1
+        # self.rect.x += self.move_direction
+        # self.move_counter += 1
+
+        # if abs(self.move_counter) > 75:
+        #     self.move_direction *= -1
+        #     self.move_counter *= -1
 
         self.mask = pygame.mask.from_surface(self.image)
 
@@ -2443,6 +2618,10 @@ class Alien_Bullets(pygame.sprite.Sprite):
             self.kill()
 
     def handle_spaceship_collision(self):
+
+        if spaceship.escape_mode:
+            return
+
         if pygame.sprite.spritecollide(self, spaceship_group, False, pygame.sprite.collide_mask):
             global time_last_hit
             time_last_hit = pygame.time.get_ticks()
