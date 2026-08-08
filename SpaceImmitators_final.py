@@ -16,7 +16,8 @@ mixer.init()
 
 
 
-from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet)
+from assets import (bg, ships, bullet_base, explosion_fx, explosion2_fx, laser_fx, small_boss_bullet, boss_image, big_bullet, small_bullet, red_ship_layers,
+    red_ship_layer_order)
 from sprites import (Spaceship, Aliens, Boss, Bullets, Missiles, Shield, SmallShield, Charge_Shot, Charge_Trail, Boss_Charge_Shot, Alien_Bullets, Boss_Bullets, BackgroundShip, BackgroundAlien, BackgroundExplosion, BackgroundAlienBullet, ShipDebris)
 from effects import Explosion, RadiatingExplosion, Thrust, Star
 
@@ -74,6 +75,11 @@ global missiley
 missilex = 0
 missiley = 0
 paused = False
+
+# Temporary red ship layer viewer
+layer_viewer_enabled = False
+layer_viewer_index = 0
+
 global field, spawn_x, spawn_y
 cooldown = 100
 wave_in_progress = False
@@ -279,13 +285,6 @@ def draw_player_missiles():
     if spaceship.missiles_remaining <= 0:
         return
 
-    mounted_missile = player_missile_image
-
-    mounted_missile = pygame.transform.rotate(
-        mounted_missile,
-        spaceship.angle
-    )
-
     missile_mounts = spaceship.get_missile_mounts()
 
     for mount_index in range(
@@ -300,6 +299,8 @@ def draw_player_missiles():
 
         mount_x, mount_y = missile_mounts[mount_index]
 
+        mounted_missile = player_missile_image
+
         missile_rect = mounted_missile.get_rect(
             center=(
                 int(mount_x),
@@ -307,34 +308,95 @@ def draw_player_missiles():
             )
         )
 
-        win.blit(mounted_missile, missile_rect)
+        win.blit(
+            mounted_missile,
+            missile_rect
+        )
 
-def draw_intro_missiles(ship_image, ship_rect):
-    ship_width = ship_image.get_width()
-    ship_height = ship_image.get_height()
+def draw_intro_missiles(ship):
+    ship_width = ship.image.get_width()
+    ship_height = ship.image.get_height()
+
+    center_x = ship_width / 2
+    center_y = ship_height / 2
 
     local_mounts = [
-        # Inside missiles
-        (-ship_width * 0.23, ship_height * 0.00),
-        (ship_width * 0.23, ship_height * 0.00),
-
-        # Outside missiles
-        (-ship_width * 0.40, ship_height * 0.05),
-        (ship_width * 0.40, ship_height * 0.05)
+        (
+            center_x - ship_width * 0.11,
+            center_y - ship_height * 0.02
+        ),
+        (
+            center_x + ship_width * 0.11,
+            center_y - ship_height * 0.02
+        ),
+        (
+            center_x - ship_width * 0.18,
+            center_y + ship_height * 0.02
+        ),
+        (
+            center_x + ship_width * 0.18,
+            center_y + ship_height * 0.02
+        )
     ]
 
-    for offset_x, offset_y in local_mounts:
-        mount_x = ship_rect.centerx + offset_x
-        mount_y = ship_rect.centery + offset_y
+    for mount_index, mount in enumerate(local_mounts):
 
-        missile_rect = player_missile_image.get_rect(
+        if ship.ship_number == 0:
+
+            if mount_index in (0, 2):
+                pivot = pygame.math.Vector2(72, 47)
+                wing_angle = ship.wing_sweep
+
+            else:
+                pivot = pygame.math.Vector2(82, 47)
+                wing_angle = -ship.wing_sweep
+
+            mount_vector = (
+                pygame.math.Vector2(mount)
+                - pivot
+            )
+
+            rotated_mount = (
+                pivot
+                + mount_vector.rotate(-wing_angle)
+            )
+
+            mount_x = (
+                ship.rect.left
+                + rotated_mount.x
+            )
+
+            mount_y = (
+                ship.rect.top
+                + rotated_mount.y
+            )
+
+        else:
+            wing_angle = 0
+
+            mount_x = (
+                ship.rect.left
+                + mount[0]
+            )
+
+            mount_y = (
+                ship.rect.top
+                + mount[1]
+            )
+
+        mounted_missile = player_missile_image
+
+        missile_rect = mounted_missile.get_rect(
             center=(
                 int(mount_x),
                 int(mount_y)
             )
         )
 
-        win.blit(player_missile_image, missile_rect)
+        win.blit(
+            mounted_missile,
+            missile_rect
+        )
 
 def pause():
     paused = True
@@ -381,6 +443,50 @@ def draw_text2(text, size, color, x, y):
     text_rect.midtop = (x, y)
     win.blit(text_surface, text_rect)
 
+def draw_layer_viewer():
+    if not layer_viewer_enabled:
+        return
+
+    layer = red_ship_layers[layer_viewer_index]
+
+    scale = 3
+
+    enlarged_layer = pygame.transform.scale(
+        layer,
+        (
+            layer.get_width() * scale,
+            layer.get_height() * scale
+        )
+    )
+
+    viewer_rect = enlarged_layer.get_rect(
+        center=(
+            screen_width // 2,
+            screen_height // 2
+        )
+    )
+
+    background_rect = viewer_rect.inflate(30, 70)
+
+    pygame.draw.rect(
+        win,
+        (15, 15, 15),
+        background_rect
+    )
+
+    win.blit(
+        enlarged_layer,
+        viewer_rect
+    )
+
+    draw_text2(
+        f"Layer {layer_viewer_index} | Sprite {layer_viewer_index + 1}",
+        24,
+        white,
+        screen_width // 2,
+        background_rect.top + 5
+    )
+
 def animate_text():
     global frame, growing, text_size
 
@@ -406,19 +512,32 @@ def show_start_screen():
     wait_for_key()
 
 # loop For Start Screen
+
 def wait_for_key():
     waiting = True
 
+    title_text = "SPACEIMITATORS!!!"
+    revealed_chars = 0
+    last_reveal_time = pygame.time.get_ticks()
+    reveal_delay = 300
+
     intro_spaceship_group.add(
-        intro_spaceship,
-        intro_spaceship2,
-        intro_spaceship3
+    intro_spaceship,
+    intro_spaceship2,
+    intro_spaceship3
     )
 
     intro_boss_group.add(intro_boss)
 
     while waiting:
         dt = clock.tick(fps) / 1000
+
+        current_time = pygame.time.get_ticks()
+
+        if current_time - last_reveal_time >= reveal_delay:
+            if revealed_chars < len(title_text):
+                revealed_chars += 1
+                last_reveal_time = current_time
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -447,8 +566,10 @@ def wait_for_key():
         # Animate and draw the title
         animated_size = animate_text()
 
+        visible_title = title_text[:revealed_chars]
+
         draw_text2(
-            "SPACEIMITATORS!!!",
+            visible_title,
             animated_size,
             green,
             screen_width / 2,
@@ -466,8 +587,7 @@ def wait_for_key():
 
         # Draw missiles beneath the main intro ship
         draw_intro_missiles(
-            intro_spaceship.image,
-            intro_spaceship.rect
+            intro_spaceship
         )
 
         # Draw ships over the missiles
@@ -649,14 +769,38 @@ def apply_screen_shake(surface):
 
 def handle_events():
     global run, paused, angle, ship_angle
+    global layer_viewer_enabled, layer_viewer_index
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
 
         elif event.type == pygame.KEYDOWN:
+
+            # Pause
             if event.key == pygame.K_p:
-                paused = not paused  # toggle pause
+                paused = not paused
+
+            # Turn layer viewer on/off
+            if event.key == pygame.K_v:
+                layer_viewer_enabled = not layer_viewer_enabled
+
+            # Change displayed layer
+            if layer_viewer_enabled:
+
+                # Previous layer
+                if event.key == pygame.K_COMMA:
+                    layer_viewer_index -= 1
+
+                    if layer_viewer_index < 0:
+                        layer_viewer_index = 9
+
+                # Next layer
+                if event.key == pygame.K_PERIOD:
+                    layer_viewer_index += 1
+
+                    if layer_viewer_index > 9:
+                        layer_viewer_index = 0
 
     # Continuous key holds
     keys = pygame.key.get_pressed()
@@ -687,8 +831,12 @@ def handle_events():
         min(30, spaceship.wing_sweep)
     )
 
+
     # --- Hold C to charge ---
-    if keys[pygame.K_c]:
+    if (
+            keys[pygame.K_c]
+            and spaceship.has_part("nose")
+    ):
 
 
         print("Charging...")
@@ -800,6 +948,7 @@ def handle_events():
     # --- Fire bullet ---
     if (
             keys[pygame.K_SPACE]
+            and spaceship.has_part("nose")
             and not spaceship.charging
             and time_now - spaceship.last_shot > cooldown
     ):
@@ -914,6 +1063,23 @@ class Intro_Spaceship(pygame.sprite.Sprite):
     def __init__(self, x, y, health, ship, upper_border, lower_border, speed):
         pygame.sprite.Sprite.__init__(self)
         self.image = ships[ship]
+        self.ship_number = ship
+
+        if self.ship_number == 0:
+            self.ship_layers = [
+                layer.copy()
+                for layer in red_ship_layers
+            ]
+
+            self.ship_layer_order = red_ship_layer_order.copy()
+
+            self.wing_sweep = 0
+            self.wing_offset_y = -4
+
+
+        else:
+            self.ship_layers = None
+            self.ship_layer_order = None
         self.rect = self.image.get_rect()
         self.rect.center = [x, y]
         self.health_start = health
@@ -926,6 +1092,94 @@ class Intro_Spaceship(pygame.sprite.Sprite):
         self.lower_border = lower_border  # Initial lower limit
         self.screen_height = 800  # Total screen height
 
+    def draw_rotated_part(
+            self,
+            surface,
+            layer_image,
+            pivot,
+            angle,
+            offset_y=0
+    ):
+        rotated_image = pygame.transform.rotate(
+            layer_image,
+            angle
+        )
+
+        original_center = pygame.math.Vector2(
+            layer_image.get_rect().center
+        )
+
+        pivot_vector = (
+            pygame.math.Vector2(pivot)
+            - original_center
+        )
+
+        rotated_pivot_vector = pivot_vector.rotate(
+            -angle
+        )
+
+        rotated_center = (
+            pygame.math.Vector2(pivot)
+            - rotated_pivot_vector
+        )
+
+        rotated_rect = rotated_image.get_rect(
+            center=(
+                round(rotated_center.x),
+                round(rotated_center.y)
+            )
+        )
+
+        rotated_rect.y += offset_y
+
+        surface.blit(
+            rotated_image,
+            rotated_rect
+        )
+
+    def rebuild_layered_ship(self):
+        if self.ship_number != 0:
+            return
+
+        layered_image = pygame.Surface(
+            ships[0].get_size(),
+            pygame.SRCALPHA
+        )
+
+        for layer_index in self.ship_layer_order:
+
+            if layer_index == 4:
+                self.draw_rotated_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (72, 47),
+                    self.wing_sweep,
+                    self.wing_offset_y
+                )
+
+            elif layer_index == 5:
+                self.draw_rotated_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (82, 47),
+                    -self.wing_sweep,
+                    self.wing_offset_y
+                )
+
+            else:
+                layered_image.blit(
+                    self.ship_layers[layer_index],
+                    (0, 0)
+                )
+
+        old_center = self.rect.center
+
+        self.image = layered_image
+
+        self.rect = self.image.get_rect(
+            center=old_center
+        )
+
     def update(self):
         # Move the ship in the current direction (up or down)
         self.rect.centery += self.speed * self.direction
@@ -937,6 +1191,20 @@ class Intro_Spaceship(pygame.sprite.Sprite):
         elif self.rect.centery >= self.lower_border:
             self.direction = -1  # Start moving up
             self.set_new_borders()  # Change the borders after hitting the lower border
+
+        if self.ship_number == 0:
+
+            # Moving upward / accelerating forward
+            if self.direction == -1:
+                if self.wing_sweep < 18:
+                    self.wing_sweep += 1.0
+
+            # Moving downward / backing off
+            elif self.direction == 1:
+                if self.wing_sweep > 0:
+                    self.wing_sweep -= 1.0
+
+            self.rebuild_layered_ship()
 
     def set_new_borders(self):
         # Set a new upper border between 0.25 * screen height and the current lower border
@@ -1313,6 +1581,7 @@ while run:
     explosion_group.update()
     ship_debris_group.update()
     missile_group.update()
+    draw_layer_viewer()
     background_ship_hits = pygame.sprite.groupcollide(
         background_ship_group,
         background_alien_bullet_group,

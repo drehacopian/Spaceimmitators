@@ -863,27 +863,180 @@ class ShipDebris(pygame.sprite.Sprite):
         if self.ship_number != 0:
             return
 
-        # Convert screen position into position
-        # inside the 154 x 80 red ship canvas.
+        # Position of the hit inside the 154 x 80 ship canvas
         local_x = hit_x - self.rect.left
         local_y = hit_y - self.rect.top
 
         part_name = None
 
-        # Small left sweep wing
+        # --------------------------------------------------
+        # LEFT SWEEP WING
+        # --------------------------------------------------
+
+        if self.has_part("sweep_left_wing"):
+
+            left_layer = self.ship_layers[4]
+
+            left_rotated = pygame.transform.rotate(
+                left_layer,
+                self.wing_sweep
+            )
+
+            original_center = pygame.math.Vector2(
+                left_layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(72, 47)
+
+            pivot_vector = (
+                    pivot
+                    - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -self.wing_sweep
+            )
+
+            rotated_center = (
+                    pivot
+                    - rotated_pivot_vector
+            )
+
+            left_rect = left_rotated.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            left_rect.y += self.wing_offset_y
+
+            left_mask = pygame.mask.from_surface(
+                left_rotated
+            )
+
+            mask_x = int(local_x - left_rect.left)
+            mask_y = int(local_y - left_rect.top)
+
+            if (
+                    0 <= mask_x < left_mask.get_size()[0]
+                    and 0 <= mask_y < left_mask.get_size()[1]
+                    and left_mask.get_at((mask_x, mask_y))
+            ):
+                part_name = "sweep_left_wing"
+
+        # --------------------------------------------------
+        # RIGHT SWEEP WING
+        # --------------------------------------------------
+
         if (
-                30 <= local_x <= 72
-                and 28 <= local_y <= 62
+                part_name is None
+                and self.has_part("sweep_right_wing")
         ):
-            part_name = "sweep_left_wing"
 
-        # Small right sweep wing
-        elif (
-                82 <= local_x <= 124
-                and 28 <= local_y <= 62
-        ):
-            part_name = "sweep_right_wing"
+            right_layer = self.ship_layers[5]
 
+            right_angle = -self.wing_sweep
+
+            right_rotated = pygame.transform.rotate(
+                right_layer,
+                right_angle
+            )
+
+            original_center = pygame.math.Vector2(
+                right_layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(82, 47)
+
+            pivot_vector = (
+                    pivot
+                    - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -right_angle
+            )
+
+            rotated_center = (
+                    pivot
+                    - rotated_pivot_vector
+            )
+
+            right_rect = right_rotated.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            right_rect.y += self.wing_offset_y
+
+            right_mask = pygame.mask.from_surface(
+                right_rotated
+            )
+
+            mask_x = int(local_x - right_rect.left)
+            mask_y = int(local_y - right_rect.top)
+
+            if (
+                    0 <= mask_x < right_mask.get_size()[0]
+                    and 0 <= mask_y < right_mask.get_size()[1]
+                    and right_mask.get_at((mask_x, mask_y))
+            ):
+                part_name = "sweep_right_wing"
+
+        # --------------------------------------------------
+        # ALL OTHER RED-SHIP PARTS
+        # --------------------------------------------------
+
+        if part_name is None:
+
+            static_parts = [
+                "right_small_jet",
+                "left_small_jet",
+                "nose",
+                "cockpit",
+                "rear_right_wing",
+                "rear_left_wing",
+                "core",
+                "rocket"
+            ]
+
+            for static_part_name in static_parts:
+
+                part = self.ship_parts.get(
+                    static_part_name
+                )
+
+                if part is None:
+                    continue
+
+                if not part["attached"]:
+                    continue
+
+                layer_index = part["layer"]
+
+                layer_image = self.ship_layers[
+                    layer_index
+                ]
+
+                part_mask = pygame.mask.from_surface(
+                    layer_image
+                )
+
+                mask_x = int(local_x)
+                mask_y = int(local_y)
+
+                if (
+                        0 <= mask_x < part_mask.get_size()[0]
+                        and 0 <= mask_y < part_mask.get_size()[1]
+                        and part_mask.get_at((mask_x, mask_y))
+                ):
+                    part_name = static_part_name
+                    break
+
+        # No individual component was actually hit
         if part_name is None:
             return
 
@@ -1012,43 +1165,43 @@ class Spaceship(pygame.sprite.Sprite):
 
             self.ship_layer_order = red_ship_layer_order.copy()
             self.ship_parts = {
-                "part_1": {
+                "cockpit": {
                     "layer": 0,
                     "attached": True,
                     "health": 2
                 },
 
-                "part_2": {
+                "nose": {
                     "layer": 1,
                     "attached": True,
-                    "health": 2
+                    "health": 1
                 },
 
                 "rear_left_wing": {
                     "layer": 2,
                     "attached": True,
-                    "health": 3
+                    "health": 1
                 },
 
                 "rear_right_wing": {
                     "layer": 3,
                     "attached": True,
-                    "health": 3
+                    "health": 1
                 },
 
                 "sweep_left_wing": {
                     "layer": 4,
                     "attached": True,
-                    "health": 2
+                    "health": 1
                 },
 
                 "sweep_right_wing": {
                     "layer": 5,
                     "attached": True,
-                    "health": 2
+                    "health": 1
                 },
 
-                "part_7": {
+                "core": {
                     "layer": 6,
                     "attached": True,
                     "health": 3
@@ -1060,13 +1213,13 @@ class Spaceship(pygame.sprite.Sprite):
                     "health": 2
                 },
 
-                "part_9": {
+                "left_small_jet": {
                     "layer": 8,
                     "attached": True,
                     "health": 2
                 },
 
-                "part_10": {
+                "right_small_jet": {
                     "layer": 9,
                     "attached": True,
                     "health": 2
@@ -1094,41 +1247,73 @@ class Spaceship(pygame.sprite.Sprite):
         ship_width = self.image_orig.get_width()
         ship_height = self.image_orig.get_height()
 
+        center_x = ship_width / 2
+        center_y = ship_height / 2
+
         local_mounts = [
             # Left inside
-            (-ship_width * 0.11, ship_height * -0.02),
+            (
+                center_x - ship_width * 0.11,
+                center_y - ship_height * 0.02
+            ),
 
             # Right inside
-            (ship_width * 0.11, ship_height * -0.02),
+            (
+                center_x + ship_width * 0.11,
+                center_y - ship_height * 0.02
+            ),
 
             # Left outside
-            (-ship_width * 0.18, ship_height * 0.02),
+            (
+                center_x - ship_width * 0.18,
+                center_y + ship_height * 0.02
+            ),
 
             # Right outside
-            (ship_width * 0.18, ship_height * 0.02)
+            (
+                center_x + ship_width * 0.18,
+                center_y + ship_height * 0.02
+            )
         ]
 
-        angle_radians = math.radians(self.angle)
-        cosine = math.cos(angle_radians)
-        sine = math.sin(angle_radians)
+        # Normal ships keep fixed missile positions.
+        if self.ship_number != 0:
+            return [
+                (
+                    self.rect.left + mount_x,
+                    self.rect.top + mount_y
+                )
+                for mount_x, mount_y in local_mounts
+            ]
 
         mounts = []
 
-        for offset_x, offset_y in local_mounts:
-            rotated_x = (
-                    offset_x * cosine
-                    + offset_y * sine
+        for mount_index, mount in enumerate(local_mounts):
+
+            # Left missiles follow the small left sweep wing.
+            if mount_index in (0, 2):
+                pivot = pygame.math.Vector2(72, 47)
+                wing_angle = self.wing_sweep
+
+            # Right missiles follow the small right sweep wing.
+            else:
+                pivot = pygame.math.Vector2(82, 47)
+                wing_angle = -self.wing_sweep
+
+            mount_vector = (
+                    pygame.math.Vector2(mount)
+                    - pivot
             )
 
-            rotated_y = (
-                    -offset_x * sine
-                    + offset_y * cosine
+            rotated_mount = (
+                    pivot
+                    + mount_vector.rotate(-wing_angle)
             )
 
             mounts.append(
                 (
-                    self.rect.centerx + rotated_x,
-                    self.rect.centery + rotated_y
+                    self.rect.left + rotated_mount.x,
+                    self.rect.top + rotated_mount.y
                 )
             )
 
@@ -1307,27 +1492,176 @@ class Spaceship(pygame.sprite.Sprite):
 
         part_name = None
 
-        # Small left sweep wing
+        # --------------------------------------------------
+        # LEFT MOVING SWEEP WING
+        # --------------------------------------------------
+
+        if self.has_part("sweep_left_wing"):
+
+            layer = self.ship_layers[4]
+
+            rotated_layer = pygame.transform.rotate(
+                layer,
+                self.wing_sweep
+            )
+
+            original_center = pygame.math.Vector2(
+                layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(72, 47)
+
+            pivot_vector = (
+                    pivot - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -self.wing_sweep
+            )
+
+            rotated_center = (
+                    pivot - rotated_pivot_vector
+            )
+
+            wing_rect = rotated_layer.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            wing_rect.y += self.wing_offset_y
+
+            wing_mask = pygame.mask.from_surface(
+                rotated_layer
+            )
+
+            mask_x = int(
+                local_x - wing_rect.left
+            )
+
+            mask_y = int(
+                local_y - wing_rect.top
+            )
+
+            if (
+                    0 <= mask_x < wing_mask.get_size()[0]
+                    and 0 <= mask_y < wing_mask.get_size()[1]
+                    and wing_mask.get_at((mask_x, mask_y))
+            ):
+                part_name = "sweep_left_wing"
+
+        # --------------------------------------------------
+        # RIGHT MOVING SWEEP WING
+        # --------------------------------------------------
+
         if (
-                30 <= local_x <= 72
-                and 28 <= local_y <= 62
+                part_name is None
+                and self.has_part("sweep_right_wing")
         ):
-            part_name = "sweep_left_wing"
 
-        # Small right sweep wing
-        elif (
-                82 <= local_x <= 124
-                and 28 <= local_y <= 62
-        ):
-            part_name = "sweep_right_wing"
+            layer = self.ship_layers[5]
 
+            wing_angle = -self.wing_sweep
+
+            rotated_layer = pygame.transform.rotate(
+                layer,
+                wing_angle
+            )
+
+            original_center = pygame.math.Vector2(
+                layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(82, 47)
+
+            pivot_vector = (
+                    pivot - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -wing_angle
+            )
+
+            rotated_center = (
+                    pivot - rotated_pivot_vector
+            )
+
+            wing_rect = rotated_layer.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            wing_rect.y += self.wing_offset_y
+
+            wing_mask = pygame.mask.from_surface(
+                rotated_layer
+            )
+
+            mask_x = int(
+                local_x - wing_rect.left
+            )
+
+            mask_y = int(
+                local_y - wing_rect.top
+            )
+
+            if (
+                    0 <= mask_x < wing_mask.get_size()[0]
+                    and 0 <= mask_y < wing_mask.get_size()[1]
+                    and wing_mask.get_at((mask_x, mask_y))
+            ):
+                part_name = "sweep_right_wing"
+
+        # --------------------------------------------------
+        # ALL NON-MOVING COMPONENTS
+        # --------------------------------------------------
+
+        if part_name is None:
+
+            static_parts = [
+                "cockpit",
+                "nose",
+                "rear_left_wing",
+                "rear_right_wing",
+                "core",
+                "rocket",
+                "left_small_jet",
+                "right_small_jet"
+            ]
+
+            for candidate_name in static_parts:
+
+                part = self.ship_parts[candidate_name]
+
+                if not part["attached"]:
+                    continue
+
+                layer_index = part["layer"]
+                layer = self.ship_layers[layer_index]
+
+                part_mask = pygame.mask.from_surface(
+                    layer
+                )
+
+                mask_x = int(local_x)
+                mask_y = int(local_y)
+
+                if (
+                        0 <= mask_x < part_mask.get_size()[0]
+                        and 0 <= mask_y < part_mask.get_size()[1]
+                        and part_mask.get_at((mask_x, mask_y))
+                ):
+                    part_name = candidate_name
+                    break
+
+        # Nothing identifiable was hit
         if part_name is None:
             return
 
         part = self.ship_parts[part_name]
-
-        if not part["attached"]:
-            return
 
         part["health"] -= damage
 
@@ -1358,6 +1692,13 @@ class Spaceship(pygame.sprite.Sprite):
             return
 
         part["attached"] = False
+
+        # Rear wing also takes its attached small jet with it
+        if part_name == "rear_left_wing":
+            self.ship_parts["left_small_jet"]["attached"] = False
+
+        elif part_name == "rear_right_wing":
+            self.ship_parts["right_small_jet"]["attached"] = False
 
         layer_index = part["layer"]
 
@@ -2008,12 +2349,24 @@ class Boss_Bullets(pygame.sprite.Sprite):
             time_last_hit = pygame.time.get_ticks()
             self.kill()
             explosion2_fx.play()
-            spaceship.damage_part_at_point(
-                self.rect.centerx,
-                self.rect.centery,
-                2,
-                ship_debris_group
+            offset_x = spaceship.rect.left - self.rect.left
+            offset_y = spaceship.rect.top - self.rect.top
+
+            overlap_point = self.mask.overlap(
+                spaceship.mask,
+                (offset_x, offset_y)
             )
+
+            if overlap_point is not None:
+                hit_x = self.rect.left + overlap_point[0]
+                hit_y = self.rect.top + overlap_point[1]
+
+                spaceship.damage_part_at_point(
+                    hit_x,
+                    hit_y,
+                    1,
+                    ship_debris_group
+                )
             spaceship.health_remaining -= 2
             explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
             explosion_group.add(explosion)
