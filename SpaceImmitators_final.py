@@ -398,6 +398,82 @@ def draw_intro_missiles(ship):
             missile_rect
         )
 
+def draw_escape_thruster():
+    if not spaceship.escape_mode:
+        return
+
+    if spaceship.escape_finished:
+        return
+
+    frames = [
+        thrust1,
+        thrust2,
+        thrust3
+    ]
+
+    frame_index = (
+        pygame.time.get_ticks() // 80
+    ) % len(frames)
+
+    thruster_image = frames[frame_index]
+
+    thruster_image = pygame.transform.rotate(
+        thruster_image,
+        180
+    )
+
+    # Determine travel direction
+    velocity_x = spaceship.escape_velocity_x
+    velocity_y = spaceship.escape_velocity_y
+
+    angle = math.degrees(
+        math.atan2(
+            -velocity_y,
+            velocity_x
+        )
+    )
+
+    # Flame points opposite the direction of travel
+    rotation = angle - 90
+
+    thruster_image = pygame.transform.rotate(
+        thruster_image,
+        rotation
+    )
+
+    direction = pygame.math.Vector2(
+        velocity_x,
+        velocity_y
+    )
+
+    if direction.length() == 0:
+        direction = pygame.math.Vector2(0, -1)
+
+    direction = direction.normalize()
+
+    # Put flame behind the escaping craft
+    thruster_x = (
+        spaceship.rect.centerx
+        - direction.x * 38
+    )
+
+    thruster_y = (
+        spaceship.rect.centery
+        - direction.y * 38
+    )
+
+    thruster_rect = thruster_image.get_rect(
+        center=(
+            int(thruster_x),
+            int(thruster_y)
+        )
+    )
+
+    win.blit(
+        thruster_image,
+        thruster_rect
+    )
+
 def pause():
     paused = True
 
@@ -929,9 +1005,11 @@ def handle_events():
         #angle += 2
         #ship_angle -= 2
 
-
-    # --- Movement is disabled while charging ---
-    if not spaceship.charging:
+    # --- Movement is disabled while charging or escaping ---
+    if (
+            not spaceship.charging
+            and not spaceship.escape_mode
+    ):
 
         if keys[pygame.K_LEFT] and spaceship.rect.left > 0:
             spaceship.rect.x -= 5 * spaceship.get_turn_strength("left")
@@ -1477,6 +1555,8 @@ while run:
 
     # update..............................
     spaceship.update()
+    if spaceship.escape_finished:
+        game_over = True
     formation.update()
     current_time = pygame.time.get_ticks()
 
@@ -1607,6 +1687,7 @@ while run:
     background_beam_effect_group.draw(win)
     background_explosion_group.draw(win)
     draw_player_missiles()
+    draw_escape_thruster()
     spaceship_group.draw(win)
     ship_debris_group.draw(win)
     if post_boss_transition and not game_over:

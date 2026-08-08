@@ -1154,6 +1154,16 @@ class Spaceship(pygame.sprite.Sprite):
         # Variable-geometry wing angle for red ship
         self.wing_sweep = 0
         self.wing_offset_y = -4
+        self.escape_mode = False
+
+        self.escape_finished = False
+        self.escape_direction = None
+        self.escape_velocity_x = 0.0
+        self.escape_velocity_y = 0.0
+        self.escape_weave = random.uniform(0, math.tau)
+
+        self.escape_start_time = 0
+        self.escape_delay = 700
 
         # Individual layered parts for the red ship only.
         # Other ships continue using their normal single image.
@@ -1443,6 +1453,136 @@ class Spaceship(pygame.sprite.Sprite):
 
         return part["attached"]
 
+    def check_escape_mode(self):
+        if self.ship_number != 0:
+            return False
+
+        if self.escape_mode:
+            return True
+
+        escape_parts_lost = (
+                not self.has_part("nose")
+                and not self.has_part("rear_left_wing")
+                and not self.has_part("rear_right_wing")
+                and not self.has_part("sweep_left_wing")
+                and not self.has_part("sweep_right_wing")
+        )
+
+        if escape_parts_lost:
+            self.escape_mode = True
+            self.escape_start_time = pygame.time.get_ticks()
+
+            self.escape_direction = random.choice([
+                "left",
+                "right",
+                "top"
+            ])
+
+            if self.escape_direction == "left":
+                self.escape_velocity_x = -4.0
+                self.escape_velocity_y = -2.5
+
+            elif self.escape_direction == "right":
+                self.escape_velocity_x = 4.0
+                self.escape_velocity_y = -2.5
+
+            else:
+                self.escape_velocity_x = random.uniform(-1.5, 1.5)
+                self.escape_velocity_y = -5.0
+
+            print(
+                "ESCAPE MODE STARTED:",
+                self.escape_direction
+            )
+
+            return True
+
+        return False
+
+    def update_escape(self):
+        if not self.escape_mode:
+            return
+
+        if (
+                pygame.time.get_ticks()
+                - self.escape_start_time
+                < self.escape_delay
+        ):
+            return
+
+        # Gentle unpredictable weaving
+        self.escape_weave += 0.09
+
+        weave_x = math.sin(
+            self.escape_weave
+        ) * 1.3
+
+        weave_y = math.cos(
+            self.escape_weave * 0.7
+        ) * 0.5
+
+        dodge_x = 0
+        dodge_y = 0
+
+        # Avoid ordinary alien bullets
+        threatening_bullets = list(alien_bullet_group)
+
+        # Also avoid boss bullets
+        threatening_bullets += list(boss_bullet_group)
+
+        for bullet in threatening_bullets:
+
+            distance_x = (
+                    bullet.rect.centerx
+                    - self.rect.centerx
+            )
+
+            distance_y = (
+                    bullet.rect.centery
+                    - self.rect.centery
+            )
+
+            # Only react to reasonably nearby bullets
+            if (
+                    abs(distance_x) < 100
+                    and abs(distance_y) < 150
+            ):
+
+                # Dodge away horizontally
+                if distance_x < 0:
+                    dodge_x += 2.5
+                else:
+                    dodge_x -= 2.5
+
+                # Also try to move away vertically
+                if distance_y < 0:
+                    dodge_y += 1.0
+                else:
+                    dodge_y -= 1.0
+
+        self.rect.x += int(
+            self.escape_velocity_x
+            + weave_x
+            + dodge_x
+        )
+
+        self.rect.y += int(
+            self.escape_velocity_y
+            + weave_y
+            + dodge_y
+        )
+
+        screen_width = pygame.display.get_surface().get_width()
+        screen_height = pygame.display.get_surface().get_height()
+
+        # Escape completed
+        if (
+                self.rect.right < -40
+                or self.rect.left > screen_width + 40
+                or self.rect.bottom < -40
+        ):
+            self.escape_finished = True
+
     def missile_mount_available(self, mount_index):
         if self.ship_number != 0:
             return True
@@ -1622,14 +1762,14 @@ class Spaceship(pygame.sprite.Sprite):
         if part_name is None:
 
             static_parts = [
-                "cockpit",
-                "nose",
-                "rear_left_wing",
-                "rear_right_wing",
-                "core",
-                "rocket",
+                "right_small_jet",
                 "left_small_jet",
-                "right_small_jet"
+                "nose",
+                "cockpit",
+                "rear_right_wing",
+                "rear_left_wing",
+                "core",
+                "rocket"
             ]
 
             for candidate_name in static_parts:
@@ -1662,6 +1802,15 @@ class Spaceship(pygame.sprite.Sprite):
             return
 
         part = self.ship_parts[part_name]
+
+        # Keep the escape assembly intact.
+        # These components will be handled by the escape system instead.
+        if part_name in (
+                "cockpit",
+                "core",
+                "rocket"
+        ):
+            return
 
         part["health"] -= damage
 
@@ -1712,9 +1861,14 @@ class Spaceship(pygame.sprite.Sprite):
 
         self.rebuild_layered_ship()
 
+        self.check_escape_mode()
+
     def update(self):
         if self.ship_number == 0:
             self.rebuild_layered_ship()
+
+        if self.escape_mode:
+            self.update_escape()
 
         self.mask = pygame.mask.from_surface(self.image)
 
@@ -2302,12 +2456,13 @@ class Alien_Bullets(pygame.sprite.Sprite):
                 ship_debris_group
             )
 
-            spaceship.health_remaining -= 1
-            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion = Explosion(
+                self.rect.centerx,
+                self.rect.centery,
+                2
+            )
+
             explosion_group.add(explosion)
-            if spaceship.health_remaining <= 0:
-                explosion2 = Explosion(spaceship.rect.centerx, spaceship.rect.centery, 3)
-                explosion_group.add(explosion2)
 
     def handle_charge_shot_collision(self):
         if pygame.sprite.spritecollide(self, Charge_Shot_group, False, pygame.sprite.collide_mask):
@@ -2367,12 +2522,13 @@ class Boss_Bullets(pygame.sprite.Sprite):
                     1,
                     ship_debris_group
                 )
-            spaceship.health_remaining -= 2
-            explosion = Explosion(self.rect.centerx, self.rect.centery, 2)
+            explosion = Explosion(
+                self.rect.centerx,
+                self.rect.centery,
+                2
+            )
+
             explosion_group.add(explosion)
-            if spaceship.health_remaining <= 0:
-                explosion2 = Explosion(spaceship.rect.centerx, spaceship.rect.centery, 3)
-                explosion_group.add(explosion2)
 
     def handle_charge_shot_collision(self):
         # Boss bullet is stronger → removes Charge_Shot
