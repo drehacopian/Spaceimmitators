@@ -1155,6 +1155,7 @@ class Spaceship(pygame.sprite.Sprite):
         self.wing_sweep = 0
         self.wing_offset_y = -4
         self.escape_mode = False
+        self.last_hit_alien = None
 
         self.escape_finished = False
         self.escape_direction = None
@@ -1489,6 +1490,71 @@ class Spaceship(pygame.sprite.Sprite):
             return False
 
         self.escape_mode = True
+
+        # --------------------------------------------------
+        # FINAL ALIEN CELEBRATION
+        # --------------------------------------------------
+
+        living_aliens = [
+            alien
+            for alien in alien_group
+            if alien.alive()
+        ]
+
+        final_hit_alien = self.last_hit_alien
+
+        # Pick a few aliens to point and laugh.
+        laughing_candidates = [
+            alien
+            for alien in living_aliens
+            if alien is not final_hit_alien
+        ]
+
+        random.shuffle(laughing_candidates)
+
+        laughing_count = min(
+            random.randint(3, 5),
+            len(laughing_candidates)
+        )
+
+        laughing_aliens = laughing_candidates[
+                          :laughing_count
+                          ]
+
+        for alien in living_aliens:
+
+            alien.final_celebration = True
+            alien.reaction_until = 0
+
+            # Final-hit alien goes crazy fist-pumping.
+            if alien is final_hit_alien:
+
+                alien.frames = alien.celebrate_frames
+                alien.frame_index = 0
+
+                alien.animation_speed = (
+                        alien.normal_animation_speed * 1.6
+                )
+
+            # A few aliens point and laugh.
+            elif alien in laughing_aliens:
+
+                alien.frames = alien.point_frames
+                alien.frame_index = 0
+
+                alien.animation_speed = (
+                    alien.normal_animation_speed
+                )
+
+            # Everyone else twirls.
+            else:
+
+                alien.frames = alien.spin_frames
+                alien.frame_index = 0
+
+                alien.animation_speed = (
+                    alien.normal_animation_speed
+                )
         self.escape_start_time = pygame.time.get_ticks()
 
         # --------------------------------------------------
@@ -2026,6 +2092,10 @@ class Spaceship(pygame.sprite.Sprite):
         if self.escape_mode:
             return
 
+        if hasattr(projectile, "shooter"):
+            if projectile.shooter is not None:
+                self.last_hit_alien = projectile.shooter
+
         projectile_mask = pygame.mask.from_surface(
             projectile.image
         )
@@ -2355,7 +2425,21 @@ class Aliens(pygame.sprite.Sprite):
         self.attack_start_x = x
         self.original_y = y
 
+        self.reaction_until = 0
+        self.final_celebration = False
+        self.normal_animation_speed = self.animation_speed
+
     def update(self):
+        current_time = pygame.time.get_ticks()
+
+        if (
+                self.reaction_until > 0
+                and current_time >= self.reaction_until
+                and not self.final_celebration
+        ):
+            self.idle()
+            self.reaction_until = 0
+
         # Animate
         self.frame_index += self.animation_speed
 
@@ -2368,14 +2452,14 @@ class Aliens(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=old_center)
 
         # Simple horizontal movement
-        # TEMPORARILY DISABLED FOR DAMAGE TESTING
+        if not self.final_celebration:
 
-        # self.rect.x += self.move_direction
-        # self.move_counter += 1
+            self.rect.x += self.move_direction
+            self.move_counter += 1
 
-        # if abs(self.move_counter) > 75:
-        #     self.move_direction *= -1
-        #     self.move_counter *= -1
+            if abs(self.move_counter) > 75:
+                self.move_direction *= -1
+                self.move_counter *= -1
 
         self.mask = pygame.mask.from_surface(self.image)
 
@@ -2383,13 +2467,23 @@ class Aliens(pygame.sprite.Sprite):
         self.frames = self.idle_frames
         self.frame_index = 0
 
-    def celebrate(self):
+    def celebrate(self, duration=2500):
         self.frames = self.celebrate_frames
         self.frame_index = 0
 
-    def point(self):
+        self.reaction_until = (
+                pygame.time.get_ticks()
+                + duration
+        )
+
+    def point(self, duration=2500):
         self.frames = self.point_frames
         self.frame_index = 0
+
+        self.reaction_until = (
+                pygame.time.get_ticks()
+                + duration
+        )
 
     def spin(self):
         self.frames = self.spin_frames
@@ -2860,8 +2954,11 @@ class Boss_Charge_Shot(pygame.sprite.Sprite):
         self.handle_missile_collision()
 
 class Alien_Bullets(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, shooter=None):
         super().__init__()
+
+        self.shooter = shooter
+
         self.image = pygame.image.load("alien_bullet.png")
         self.rect = self.image.get_rect(center=(x, y))
 
@@ -2880,6 +2977,33 @@ class Alien_Bullets(pygame.sprite.Sprite):
             time_last_hit = pygame.time.get_ticks()
             self.kill()
             explosion2_fx.play()
+
+            # Alien that landed the hit fist-pumps
+            if (
+                    self.shooter is not None
+                    and self.shooter.alive()
+            ):
+                self.shooter.celebrate()
+
+            # 3 or 4 other aliens point and laugh
+            other_aliens = [
+                alien
+                for alien in alien_group
+                if (
+                        alien.alive()
+                        and alien is not self.shooter
+                )
+            ]
+
+            random.shuffle(other_aliens)
+
+            reaction_count = min(
+                random.randint(3, 4),
+                len(other_aliens)
+            )
+
+            for alien in other_aliens[:reaction_count]:
+                alien.point()
 
             spaceship.damage_part_from_projectile(
                 self,

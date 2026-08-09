@@ -1578,9 +1578,17 @@ while run:
 
     # shoot
     # took this out >>>>> and len(alien_bullet_group) < 5
-    if time_now - last_alien_shot > alien_cooldown and len(alien_group) > 0:
+    if (
+            not spaceship.escape_mode
+            and time_now - last_alien_shot > alien_cooldown
+            and len(alien_group) > 0
+    ):
         attacking_alien = random.choice(alien_group.sprites())
-        alien_bullet = Alien_Bullets(attacking_alien.rect.centerx, attacking_alien.rect.bottom + 10)
+        alien_bullet = Alien_Bullets(
+            attacking_alien.rect.centerx,
+            attacking_alien.rect.bottom + 10,
+            attacking_alien
+        )
         alien_bullet_group.add(alien_bullet)
         last_alien_shot = time_now
 
