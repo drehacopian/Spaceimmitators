@@ -1773,19 +1773,37 @@ class Spaceship(pygame.sprite.Sprite):
         if self.ship_number != 0:
             return normal_strength
 
+        strength = normal_strength
+
+        # Missing left sweep wing weakens left steering
         if (
                 direction == "left"
                 and not self.has_part("sweep_left_wing")
         ):
-            return 0.45
+            strength *= 0.65
 
+        # Missing right sweep wing weakens right steering
         if (
                 direction == "right"
                 and not self.has_part("sweep_right_wing")
         ):
-            return 0.45
+            strength *= 0.65
 
-        return normal_strength
+        # Missing left rear wing further weakens left steering
+        if (
+                direction == "left"
+                and not self.has_part("rear_left_wing")
+        ):
+            strength *= 0.65
+
+        # Missing right rear wing further weakens right steering
+        if (
+                direction == "right"
+                and not self.has_part("rear_right_wing")
+        ):
+            strength *= 0.65
+
+        return strength
 
     def damage_part_at_point(
             self,
@@ -2394,9 +2412,19 @@ class Boss(pygame.sprite.Sprite):
 class Bullets(pygame.sprite.Sprite):
     base_image = pygame.image.load("bullet.png")  # already preloaded in assets
 
-    def __init__(self, x, y, angle, speed=10):
+    def __init__(self, x, y, angle, speed=10, emergency=False):
         super().__init__()
+        self.emergency = emergency
         self.original_image = Bullets.base_image
+
+        if self.emergency:
+            self.original_image = pygame.transform.scale(
+                self.original_image,
+                (
+                    max(2, self.original_image.get_width() // 2),
+                    max(2, self.original_image.get_height() // 2)
+                )
+            )
         self.image = pygame.transform.rotate(self.original_image, angle - 90)
         self.rect = self.image.get_rect(center=(x, y))
 
@@ -2450,7 +2478,11 @@ class Bullets(pygame.sprite.Sprite):
             if pygame.sprite.spritecollide(self, group, kill_on_hit):
                 self.trigger_explosion(explosion_group)
                 if group == boss_group:
-                    boss.health_remaining -= 0.5
+
+                    if self.emergency:
+                        boss.health_remaining -= 0.2
+                    else:
+                        boss.health_remaining -= 0.5
                 elif group == shield_group:
                     shield.health_remaining -= 1
                 break

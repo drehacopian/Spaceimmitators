@@ -1014,17 +1014,50 @@ def handle_events():
         if keys[pygame.K_DOWN] and spaceship.rect.bottom < screen_height:
             spaceship.rect.y += 5
 
-    # --- Fire bullet ---
+    # --- Fire normal or emergency bullet ---
+
     if (
             keys[pygame.K_SPACE]
-            and spaceship.has_part("nose")
             and not spaceship.charging
-            and time_now - spaceship.last_shot > cooldown
     ):
-        bullet = Bullets(spaceship.rect.centerx, spaceship.rect.top, angle)
-        bullets_group.add(bullet)
-        spaceship.last_shot = time_now
-        laser_fx.play()
+
+        # Nose intact = normal weapon
+        if (
+                spaceship.has_part("nose")
+                and time_now - spaceship.last_shot > cooldown
+        ):
+
+            bullet = Bullets(
+                spaceship.rect.centerx,
+                spaceship.rect.top,
+                angle
+            )
+
+            bullets_group.add(bullet)
+
+            spaceship.last_shot = time_now
+
+            laser_fx.play()
+
+        # Nose destroyed = weak emergency weapon
+        elif (
+                not spaceship.has_part("nose")
+                and time_now - spaceship.last_shot > 500
+        ):
+
+            bullet = Bullets(
+                spaceship.rect.centerx,
+                spaceship.rect.top + 20,
+                angle,
+                speed=8,
+                emergency=True
+            )
+
+            bullets_group.add(bullet)
+
+            spaceship.last_shot = time_now
+
+            laser_fx.play()
 
     # --- Missile assist ---
     # --- Straight missile shot ---
