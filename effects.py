@@ -115,35 +115,121 @@ class Star:
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        self.reset(random.randint(0, screen_height))
+        self.streaking = False
+        self.streak_timer = 0
+        self.streak_duration = 0
+
+        self.reset(
+            random.randint(
+                0,
+                screen_height
+            )
+        )
 
     def reset(self, y=None):
         if y is None:
-            y = random.randint(-100, -10)
+            y = random.randint(
+                -100,
+                -10
+            )
 
-        self.x = random.randint(0, self.screen_width)
+        self.x = random.randint(
+            0,
+            self.screen_width
+        )
+
         self.y = y
 
-        self.depth = random.uniform(0.25, 1.0)
-        self.speed = 40 + self.depth * 170
-        self.size = max(1, int(self.depth * 3))
+        self.depth = random.uniform(
+            0.25,
+            1.0
+        )
+
+        self.speed = (
+            40
+            + self.depth * 170
+        )
+
+        self.size = max(
+            1,
+            int(self.depth * 3)
+        )
+
+        self.streaking = False
+        self.streak_timer = 0
+
+    def start_streak(self):
+        self.streaking = True
+
+        self.streak_duration = random.randint(
+            18,
+            30
+        )
+
+        self.streak_timer = self.streak_duration
 
     def update(self, dt):
-        self.y += self.speed * dt
+        if self.streaking:
+            self.y += self.speed * 10 * dt
 
-        if self.y > self.screen_height + 10:
+            self.streak_timer -= 1
+
+            if self.streak_timer <= 0:
+                self.streaking = False
+
+        else:
+            self.y += self.speed * dt
+
+        if self.y > self.screen_height + 30:
             self.reset()
 
     def draw(self, surface):
-        brightness = int(100 + self.depth * 155)
-        color = (brightness, brightness, brightness)
-
-        pygame.draw.circle(
-            surface,
-            color,
-            (int(self.x), int(self.y)),
-            self.size
+        brightness = int(
+            100
+            + self.depth * 155
         )
+
+        color = (
+            brightness,
+            brightness,
+            brightness
+        )
+
+        if self.streaking:
+
+            streak_length = int(
+                90
+                + self.depth * 135
+            )
+
+            pygame.draw.line(
+                surface,
+                color,
+                (
+                    int(self.x),
+                    int(self.y - streak_length)
+                ),
+                (
+                    int(self.x),
+                    int(self.y)
+                ),
+                max(
+                    1,
+                    self.size // 2
+                )
+            )
+
+        else:
+
+            pygame.draw.circle(
+                surface,
+                color,
+                (
+                    int(self.x),
+                    int(self.y)
+                ),
+                self.size
+            )
 
 
 # --- Thrust ---

@@ -1996,6 +1996,227 @@ class Spaceship(pygame.sprite.Sprite):
                 debris_group
             )
 
+    def damage_part_from_projectile(
+            self,
+            projectile,
+            damage,
+            debris_group
+    ):
+        if self.ship_number != 0:
+            return
+
+        if self.escape_mode:
+            return
+
+        projectile_mask = pygame.mask.from_surface(
+            projectile.image
+        )
+
+        best_part = None
+        best_overlap = 0
+
+        # --------------------------------------------------
+        # LEFT SWEEP WING
+        # --------------------------------------------------
+
+        if self.has_part("sweep_left_wing"):
+
+            layer = self.ship_layers[4]
+
+            rotated_layer = pygame.transform.rotate(
+                layer,
+                self.wing_sweep
+            )
+
+            original_center = pygame.math.Vector2(
+                layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(72, 47)
+
+            pivot_vector = (
+                    pivot - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -self.wing_sweep
+            )
+
+            rotated_center = (
+                    pivot - rotated_pivot_vector
+            )
+
+            wing_rect = rotated_layer.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            wing_rect.y += self.wing_offset_y
+
+            wing_mask = pygame.mask.from_surface(
+                rotated_layer
+            )
+
+            wing_screen_left = (
+                    self.rect.left
+                    + wing_rect.left
+            )
+
+            wing_screen_top = (
+                    self.rect.top
+                    + wing_rect.top
+            )
+
+            offset = (
+                projectile.rect.left - wing_screen_left,
+                projectile.rect.top - wing_screen_top
+            )
+
+            overlap = wing_mask.overlap_area(
+                projectile_mask,
+                offset
+            )
+
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_part = "sweep_left_wing"
+
+        # --------------------------------------------------
+        # RIGHT SWEEP WING
+        # --------------------------------------------------
+
+        if self.has_part("sweep_right_wing"):
+
+            layer = self.ship_layers[5]
+
+            wing_angle = -self.wing_sweep
+
+            rotated_layer = pygame.transform.rotate(
+                layer,
+                wing_angle
+            )
+
+            original_center = pygame.math.Vector2(
+                layer.get_rect().center
+            )
+
+            pivot = pygame.math.Vector2(82, 47)
+
+            pivot_vector = (
+                    pivot - original_center
+            )
+
+            rotated_pivot_vector = pivot_vector.rotate(
+                -wing_angle
+            )
+
+            rotated_center = (
+                    pivot - rotated_pivot_vector
+            )
+
+            wing_rect = rotated_layer.get_rect(
+                center=(
+                    round(rotated_center.x),
+                    round(rotated_center.y)
+                )
+            )
+
+            wing_rect.y += self.wing_offset_y
+
+            wing_mask = pygame.mask.from_surface(
+                rotated_layer
+            )
+
+            wing_screen_left = (
+                    self.rect.left
+                    + wing_rect.left
+            )
+
+            wing_screen_top = (
+                    self.rect.top
+                    + wing_rect.top
+            )
+
+            offset = (
+                projectile.rect.left - wing_screen_left,
+                projectile.rect.top - wing_screen_top
+            )
+
+            overlap = wing_mask.overlap_area(
+                projectile_mask,
+                offset
+            )
+
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_part = "sweep_right_wing"
+
+        # --------------------------------------------------
+        # STATIC ONE-HIT PARTS
+        # --------------------------------------------------
+
+        static_parts = [
+            "nose",
+            "rear_left_wing",
+            "rear_right_wing"
+        ]
+
+        for part_name in static_parts:
+
+            if not self.has_part(part_name):
+                continue
+
+            layer_index = self.ship_parts[
+                part_name
+            ]["layer"]
+
+            layer = self.ship_layers[
+                layer_index
+            ]
+
+            part_mask = pygame.mask.from_surface(
+                layer
+            )
+
+            offset = (
+                projectile.rect.left - self.rect.left,
+                projectile.rect.top - self.rect.top
+            )
+
+            overlap = part_mask.overlap_area(
+                projectile_mask,
+                offset
+            )
+
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_part = part_name
+
+        # Projectile touched the overall ship,
+        # but none of these destructible parts.
+        if best_part is None:
+            return
+
+        part = self.ship_parts[best_part]
+
+        part["health"] -= damage
+
+        print(
+            best_part,
+            "health:",
+            part["health"],
+            "overlap:",
+            best_overlap
+        )
+
+        if part["health"] <= 0:
+            self.detach_part(
+                best_part,
+                debris_group
+            )
+
 
 
     def detach_part(self, part_name, debris_group):
@@ -2628,9 +2849,8 @@ class Alien_Bullets(pygame.sprite.Sprite):
             self.kill()
             explosion2_fx.play()
 
-            spaceship.damage_part_at_point(
-                self.rect.centerx,
-                self.rect.centery,
+            spaceship.damage_part_from_projectile(
+                self,
                 1,
                 ship_debris_group
             )
@@ -2695,10 +2915,9 @@ class Boss_Bullets(pygame.sprite.Sprite):
                 hit_x = self.rect.left + overlap_point[0]
                 hit_y = self.rect.top + overlap_point[1]
 
-                spaceship.damage_part_at_point(
-                    hit_x,
-                    hit_y,
-                    1,
+                spaceship.damage_part_from_projectile(
+                    self,
+                    2,
                     ship_debris_group
                 )
             explosion = Explosion(

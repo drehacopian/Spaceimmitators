@@ -1355,6 +1355,14 @@ stars = [
     Star(screen_width, screen_height)
     for _ in range(150)
 ]
+
+next_star_streak = (
+    pygame.time.get_ticks()
+    + random.randint(
+    2000,
+    4000
+)
+)
 # mini_shield_group = pygame.sprite.Group()
 
 import sprites
@@ -1475,6 +1483,35 @@ while run:
 
     # record current time
     time_now = pygame.time.get_ticks()
+
+    if time_now >= next_star_streak:
+        streak_star = random.choice(
+            stars
+        )
+
+        # Put the streak somewhere clearly visible
+        streak_star.x = random.randint(
+            40,
+            screen_width - 40
+        )
+
+        streak_star.y = random.choice([
+            random.randint(-20, 60),
+            random.randint(
+                screen_height // 3,
+                screen_height // 2
+            )
+        ])
+
+        streak_star.start_streak()
+
+        next_star_streak = (
+                time_now
+                + random.randint(
+            2000,
+            4000
+        )
+        )
 
     #manage_alien_attacks()
 
