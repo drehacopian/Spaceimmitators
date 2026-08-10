@@ -76,6 +76,18 @@ missilex = 0
 missiley = 0
 paused = False
 
+left_key_down_time = 0
+right_key_down_time = 0
+
+last_left_tap = 0
+last_right_tap = 0
+
+left_vector_boost = False
+right_vector_boost = False
+
+double_tap_window = 300
+hold_boost_time = 300
+
 # Temporary red ship layer viewer
 layer_viewer_enabled = False
 layer_viewer_index = 0
@@ -836,6 +848,9 @@ def apply_screen_shake(surface):
 
 def handle_events():
     global run, paused, angle, ship_angle
+    global left_key_down_time, right_key_down_time
+    global last_left_tap, last_right_tap
+    global left_vector_boost, right_vector_boost
     global layer_viewer_enabled, layer_viewer_index
 
     for event in pygame.event.get():
@@ -847,6 +862,24 @@ def handle_events():
             # Pause
             if event.key == pygame.K_p:
                 paused = not paused
+
+            current_time = pygame.time.get_ticks()
+
+            if event.key == pygame.K_LEFT:
+
+                if current_time - last_left_tap <= double_tap_window:
+                    left_vector_boost = True
+
+                last_left_tap = current_time
+                left_key_down_time = current_time
+
+            if event.key == pygame.K_RIGHT:
+
+                if current_time - last_right_tap <= double_tap_window:
+                    right_vector_boost = True
+
+                last_right_tap = current_time
+                right_key_down_time = current_time
 
             # Turn layer viewer on/off
             if event.key == pygame.K_v:
@@ -869,8 +902,80 @@ def handle_events():
                     if layer_viewer_index > 9:
                         layer_viewer_index = 0
 
+        elif event.type == pygame.KEYUP:
+
+            if event.key == pygame.K_LEFT:
+                left_key_down_time = 0
+                left_vector_boost = False
+
+            if event.key == pygame.K_RIGHT:
+                right_key_down_time = 0
+                right_vector_boost = False
+
     # Continuous key holds
     keys = pygame.key.get_pressed()
+
+    # --------------------------------------------------
+    # --------------------------------------------------
+    # REAR WING VECTOR BOOST
+    # --------------------------------------------------
+
+    rear_wing_speed = 8
+    current_time = pygame.time.get_ticks()
+
+    # Holding LEFT for 1 second activates left boost
+    if (
+            keys[pygame.K_LEFT]
+            and left_key_down_time > 0
+            and current_time - left_key_down_time >= hold_boost_time
+    ):
+        left_vector_boost = True
+
+    # Holding RIGHT for 1 second activates right boost
+    if (
+            keys[pygame.K_RIGHT]
+            and right_key_down_time > 0
+            and current_time - right_key_down_time >= hold_boost_time
+    ):
+        right_vector_boost = True
+
+    # LEFT boost:
+    # right rear wing opens
+    if (
+            left_vector_boost
+            and keys[pygame.K_LEFT]
+            and spaceship.has_part("rear_right_wing")
+    ):
+        spaceship.right_rear_wing_angle += rear_wing_speed
+
+        if spaceship.right_rear_wing_angle > 45:
+            spaceship.right_rear_wing_angle = 45
+
+    else:
+        spaceship.right_rear_wing_angle -= rear_wing_speed
+
+        if spaceship.right_rear_wing_angle < 0:
+            spaceship.right_rear_wing_angle = 0
+
+    # RIGHT boost:
+    # left rear wing opens
+    if (
+            right_vector_boost
+            and keys[pygame.K_RIGHT]
+            and spaceship.has_part("rear_left_wing")
+    ):
+        spaceship.left_rear_wing_angle -= rear_wing_speed
+
+        if spaceship.left_rear_wing_angle < -45:
+            spaceship.left_rear_wing_angle = -45
+
+    else:
+        spaceship.left_rear_wing_angle += rear_wing_speed
+
+        if spaceship.left_rear_wing_angle > 0:
+            spaceship.left_rear_wing_angle = 0
+
+    # --- Test red ship wing sweep ---
 
     # --- Test red ship wing sweep ---
     if keys[pygame.K_LEFTBRACKET]:

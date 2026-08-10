@@ -1154,6 +1154,11 @@ class Spaceship(pygame.sprite.Sprite):
         # Variable-geometry wing angle for red ship
         self.wing_sweep = 0
         self.wing_offset_y = -4
+
+        # Rear wing vectoring
+        self.left_rear_wing_angle = 0
+        self.right_rear_wing_angle = 0
+
         self.escape_mode = False
         self.last_hit_alien = None
 
@@ -1174,6 +1179,9 @@ class Spaceship(pygame.sprite.Sprite):
         self.escape_flight_time = 0
         self.escape_min_flight_time = 180
 
+        self.overheating = False
+        self.overheat_phase = 0.0
+
         # Individual layered parts for the red ship only.
         # Other ships continue using their normal single image.
         if self.ship_number == 0:
@@ -1183,6 +1191,23 @@ class Spaceship(pygame.sprite.Sprite):
             ]
 
             self.ship_layer_order = red_ship_layer_order.copy()
+            # Custom red ship drawing order
+            # Rear wings go underneath the cockpit and sweep wings.
+
+            self.ship_layer_order = [
+                layer_index
+                for layer_index in self.ship_layer_order
+                if layer_index not in (0, 2, 3, 4, 5)
+            ]
+
+            self.ship_layer_order.extend([
+                2,  # rear left wing
+                3,  # rear right wing
+                0,  # cockpit
+                4,  # left sweep wing
+                5  # right sweep wing
+            ])
+
             self.ship_parts = {
                 "cockpit": {
                     "layer": 0,
@@ -1380,6 +1405,68 @@ class Spaceship(pygame.sprite.Sprite):
             rotated_rect
         )
 
+    def draw_vectoring_jet(
+            self,
+            surface,
+            layer_image,
+            wing_pivot,
+            wing_angle,
+            jet_pivot,
+            jet_angle
+    ):
+        # Original jet center
+        original_center = pygame.math.Vector2(
+            layer_image.get_rect().center
+        )
+
+        # --------------------------------------------------
+        # FIRST:
+        # Move the jet with the rear wing
+        # --------------------------------------------------
+
+        wing_vector = (
+                original_center
+                - pygame.math.Vector2(wing_pivot)
+        )
+
+        rotated_wing_vector = wing_vector.rotate(
+            -wing_angle
+        )
+
+        moved_center = (
+                pygame.math.Vector2(wing_pivot)
+                + rotated_wing_vector
+        )
+
+        moved_center.y += 18
+
+        # --------------------------------------------------
+        # SECOND:
+        # Rotate the jet around its own axis
+        # --------------------------------------------------
+
+        total_angle = (
+                wing_angle
+                + jet_angle
+        )
+
+        rotated_image = pygame.transform.rotate(
+            layer_image,
+            total_angle
+        )
+
+        rotated_rect = rotated_image.get_rect(
+            center=(
+                round(moved_center.x),
+                round(moved_center.y)
+            )
+        )
+
+        surface.blit(
+            rotated_image,
+            rotated_rect
+        )
+
     def layer_is_attached(self, layer_index):
         if self.ship_number != 0:
             return True
@@ -1389,6 +1476,32 @@ class Spaceship(pygame.sprite.Sprite):
                 return part["attached"]
 
         return True
+
+    def update_overheating(self):
+        if self.ship_number != 0:
+            return
+
+        damaged_parts = [
+            "nose",
+            "rear_left_wing",
+            "rear_right_wing",
+            "sweep_left_wing",
+            "sweep_right_wing"
+        ]
+
+        missing_count = sum(
+            1
+            for part_name in damaged_parts
+            if not self.has_part(part_name)
+        )
+
+        self.overheating = (
+                missing_count >= 3
+                and not self.escape_finished
+        )
+
+        if self.overheating:
+            self.overheat_phase += 0.14
 
     def rebuild_layered_ship(self):
         if self.ship_number != 0:
@@ -1424,10 +1537,125 @@ class Spaceship(pygame.sprite.Sprite):
                     self.wing_offset_y
                 )
 
+            # Layer 2 - left rear wing
+            elif layer_index == 2:
+                self.draw_rotated_ship_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (65, 35),
+                    self.left_rear_wing_angle,
+                    0
+                )
+
+            # Layer 3 - right rear wing
+            elif layer_index == 3:
+                self.draw_rotated_ship_part(
+                    layered_image,
+                    self.ship_layers[layer_index],
+                    (89, 35),
+                    self.right_rear_wing_angle,
+                    0
+                )
+
+            # Layer 8 - left small jet
+            elif layer_index == 8:
+                self.draw_vectoring_jet(
+                    layered_image,
+                    self.ship_layers[layer_index],
+
+                    # Follow the LEFT rear wing hinge
+                    (65, 35),
+
+                    # Move with the rear wing
+                    self.left_rear_wing_angle,
+
+                    # Jet's own pivot - not used for position yet
+                    (0, 0),
+
+                    # Rotate independently another equal amount
+                    self.left_rear_wing_angle
+                )
+
+            # Layer 9 - right small jet
+            elif layer_index == 9:
+                self.draw_vectoring_jet(
+                    layered_image,
+                    self.ship_layers[layer_index],
+
+                    # Follow the RIGHT rear wing hinge
+                    (89, 35),
+
+                    # Move with the rear wing
+                    self.right_rear_wing_angle,
+
+                    # Jet's own pivot - not used for position yet
+                    (0, 0),
+
+                    # Rotate independently another equal amount
+                    self.right_rear_wing_angle
+                )
+
             else:
                 layered_image.blit(
                     self.ship_layers[layer_index],
                     (0, 0)
+                )
+
+        # --------------------------------------------------
+        # OVERHEATING / NUCLEAR PULSE
+        # --------------------------------------------------
+
+        if self.overheating:
+            pulse = (
+                            math.sin(self.overheat_phase)
+                            + 1
+                    ) / 2
+
+            # Red/orange base glow
+            heat_red = 120 + int(100 * pulse)
+            heat_green = 25 + int(90 * pulse)
+
+            heat_overlay = layered_image.copy()
+
+            heat_overlay.fill(
+                (
+                    heat_red,
+                    heat_green,
+                    0,
+                    0
+                ),
+                special_flags=pygame.BLEND_RGBA_MULT
+            )
+
+            layered_image.blit(
+                heat_overlay,
+                (0, 0),
+                special_flags=pygame.BLEND_RGBA_ADD
+            )
+
+            if pulse > 0.72:
+                yellow_strength = int(
+                    (pulse - 0.72)
+                    / 0.28
+                    * 90
+                )
+
+                yellow_overlay = layered_image.copy()
+
+                yellow_overlay.fill(
+                    (
+                        yellow_strength,
+                        yellow_strength // 2,
+                        0,
+                        0
+                    ),
+                    special_flags=pygame.BLEND_RGBA_ADD
+                )
+
+                layered_image.blit(
+                    yellow_overlay,
+                    (0, 0),
+                    special_flags=pygame.BLEND_RGBA_ADD
                 )
 
         old_center = self.rect.center
@@ -2343,6 +2571,8 @@ class Spaceship(pygame.sprite.Sprite):
         self.check_escape_mode()
 
     def update(self):
+
+        self.update_overheating()
 
         if self.escape_mode:
             self.update_escape()
