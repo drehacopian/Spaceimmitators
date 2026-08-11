@@ -675,6 +675,171 @@ def wait_for_key():
 
         pygame.display.update()
 
+def draw_vector_thrusters():
+    if spaceship.escape_mode:
+        return
+
+    frame_index = (
+        pygame.time.get_ticks() // 70
+    ) % 3
+
+    frames = [
+        thrust1,
+        thrust2,
+        thrust3
+    ]
+
+    base_flame = frames[frame_index]
+
+    # Make the boss thruster artwork much smaller
+    base_flame = pygame.transform.scale(
+        base_flame,
+        (12, 24)
+    )
+
+    # --------------------------------------------------
+    # RIGHT BOOST
+    # Left rear wing / left small jet
+    # Flame fires LEFT, pushing ship RIGHT
+    # --------------------------------------------------
+
+    if (
+            right_vector_boost
+            and spaceship.has_part("rear_left_wing")
+    ):
+        jet_layer = spaceship.ship_layers[8]
+
+        visible_rect = jet_layer.get_bounding_rect(
+            min_alpha=1
+        )
+
+        jet_center = pygame.math.Vector2(
+            visible_rect.center
+        )
+
+        wing_pivot = pygame.math.Vector2(
+            65,
+            35
+        )
+
+        vector_from_hinge = (
+            jet_center
+            - wing_pivot
+        )
+
+        rotated_vector = vector_from_hinge.rotate(
+            -spaceship.left_rear_wing_angle
+        )
+
+        moved_jet_center = (
+            wing_pivot
+            + rotated_vector
+        )
+
+        # Convert ship-local position to screen position
+        jet_screen_x = (
+            spaceship.rect.left
+            + moved_jet_center.x
+        )
+
+        jet_screen_y = (
+            spaceship.rect.top
+            + moved_jet_center.y
+        )
+
+        # Flame points LEFT
+        flame = pygame.transform.rotate(
+            pygame.transform.flip(
+                base_flame,
+                True,
+                False
+            ),
+            90
+        )
+
+        flame_rect = flame.get_rect(
+            midright=(
+                int(jet_screen_x - 4),
+                int(jet_screen_y)
+            )
+        )
+
+        win.blit(
+            flame,
+            flame_rect
+        )
+
+    # --------------------------------------------------
+    # LEFT BOOST
+    # Right rear wing / right small jet
+    # Flame fires RIGHT, pushing ship LEFT
+    # --------------------------------------------------
+
+    if (
+            left_vector_boost
+            and spaceship.has_part("rear_right_wing")
+    ):
+        jet_layer = spaceship.ship_layers[9]
+
+        visible_rect = jet_layer.get_bounding_rect(
+            min_alpha=1
+        )
+
+        jet_center = pygame.math.Vector2(
+            visible_rect.center
+        )
+
+        wing_pivot = pygame.math.Vector2(
+            89,
+            35
+        )
+
+        vector_from_hinge = (
+            jet_center
+            - wing_pivot
+        )
+
+        rotated_vector = vector_from_hinge.rotate(
+            -spaceship.right_rear_wing_angle
+        )
+
+        moved_jet_center = (
+            wing_pivot
+            + rotated_vector
+        )
+
+        jet_screen_x = (
+            spaceship.rect.left
+            + moved_jet_center.x
+        )
+
+        jet_screen_y = (
+            spaceship.rect.top
+            + moved_jet_center.y
+        )
+
+        # Flame points RIGHT
+        flame = pygame.transform.rotate(
+            pygame.transform.flip(
+                base_flame,
+                True,
+                False
+            ),
+            -90
+        )
+
+        flame_rect = flame.get_rect(
+            midleft=(
+                int(jet_screen_x + 4),
+                int(jet_screen_y)
+            )
+        )
+
+        win.blit(
+            flame,
+            flame_rect
+        )
+
 # Game Over function
 def show_go_screen():
     waiting = True
@@ -1107,11 +1272,37 @@ def handle_events():
             and not spaceship.escape_mode
     ):
 
+        # LEFT movement
         if keys[pygame.K_LEFT] and spaceship.rect.left > 0:
-            spaceship.rect.x -= 5 * spaceship.get_turn_strength("left")
 
+            move_speed = 5
+
+            if (
+                    left_vector_boost
+                    and spaceship.has_part("rear_right_wing")
+            ):
+                move_speed = 9
+
+            spaceship.rect.x -= (
+                    move_speed
+                    * spaceship.get_turn_strength("left")
+            )
+
+        # RIGHT movement
         if keys[pygame.K_RIGHT] and spaceship.rect.right < screen_width:
-            spaceship.rect.x += 5 * spaceship.get_turn_strength("right")
+
+            move_speed = 5
+
+            if (
+                    right_vector_boost
+                    and spaceship.has_part("rear_left_wing")
+            ):
+                move_speed = 9
+
+            spaceship.rect.x += (
+                    move_speed
+                    * spaceship.get_turn_strength("right")
+            )
 
         if keys[pygame.K_UP] and spaceship.rect.top > 0:
             spaceship.rect.y -= 5
@@ -1861,6 +2052,7 @@ while run:
     background_beam_effect_group.draw(win)
     background_explosion_group.draw(win)
     draw_player_missiles()
+    draw_vector_thrusters()
     draw_escape_thruster()
     spaceship_group.draw(win)
     ship_debris_group.draw(win)

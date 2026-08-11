@@ -1414,57 +1414,72 @@ class Spaceship(pygame.sprite.Sprite):
             jet_pivot,
             jet_angle
     ):
-        # Original jet center
-        original_center = pygame.math.Vector2(
-            layer_image.get_rect().center
+        # Find only the visible jet pixels inside
+        # the full transparent ship-sized layer.
+        visible_rect = layer_image.get_bounding_rect(
+            min_alpha=1
+        )
+
+        if visible_rect.width == 0 or visible_rect.height == 0:
+            return
+
+        jet_image = layer_image.subsurface(
+            visible_rect
+        ).copy()
+
+
+        # Actual center of the visible jet in
+        # the original 154 x 80 ship canvas.
+        jet_center = pygame.math.Vector2(
+            visible_rect.center
         )
 
         # --------------------------------------------------
         # FIRST:
-        # Move the jet with the rear wing
+        # Jet follows the rear wing around its hinge.
         # --------------------------------------------------
 
-        wing_vector = (
-                original_center
+        vector_from_hinge = (
+                jet_center
                 - pygame.math.Vector2(wing_pivot)
         )
 
-        rotated_wing_vector = wing_vector.rotate(
+        rotated_vector = vector_from_hinge.rotate(
             -wing_angle
         )
 
-        moved_center = (
+        moved_jet_center = (
                 pygame.math.Vector2(wing_pivot)
-                + rotated_wing_vector
+                + rotated_vector
         )
-
-        moved_center.y += 18
 
         # --------------------------------------------------
         # SECOND:
-        # Rotate the jet around its own axis
+        # Jet rotates on its own axis while traveling
+        # with the wing.
         # --------------------------------------------------
 
         total_angle = (
                 wing_angle
                 + jet_angle
+                + 180
         )
 
-        rotated_image = pygame.transform.rotate(
-            layer_image,
+        rotated_jet = pygame.transform.rotate(
+            jet_image,
             total_angle
         )
 
-        rotated_rect = rotated_image.get_rect(
+        jet_rect = rotated_jet.get_rect(
             center=(
-                round(moved_center.x),
-                round(moved_center.y)
+                round(moved_jet_center.x),
+                round(moved_jet_center.y)
             )
         )
 
         surface.blit(
-            rotated_image,
-            rotated_rect
+            rotated_jet,
+            jet_rect
         )
 
     def layer_is_attached(self, layer_index):
