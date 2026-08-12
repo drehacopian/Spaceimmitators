@@ -1181,6 +1181,10 @@ class Spaceship(pygame.sprite.Sprite):
 
         self.overheating = False
         self.overheat_phase = 0.0
+        self.overheat_level = 0
+
+        self.heat = 0
+        self.last_heat_time = pygame.time.get_ticks()
 
         # Individual layered parts for the red ship only.
         # Other ships continue using their normal single image.
@@ -1496,27 +1500,42 @@ class Spaceship(pygame.sprite.Sprite):
         if self.ship_number != 0:
             return
 
-        damaged_parts = [
-            "nose",
-            "rear_left_wing",
-            "rear_right_wing",
-            "sweep_left_wing",
-            "sweep_right_wing"
-        ]
+        # ---------------------------------------------
+        # HEAT LEVELS
+        # ---------------------------------------------
 
-        missing_count = sum(
-            1
-            for part_name in damaged_parts
-            if not self.has_part(part_name)
-        )
+        if self.heat >= 9:
+            self.overheat_level = 3
+
+        elif self.heat >= 6:
+            self.overheat_level = 2
+
+        elif self.heat >= 3:
+            self.overheat_level = 1
+
+        else:
+            self.overheat_level = 0
 
         self.overheating = (
-                missing_count >= 3
+                self.overheat_level > 0
                 and not self.escape_finished
         )
 
-        if self.overheating:
+        if not self.overheating:
+            return
+
+        # ---------------------------------------------
+        # PULSE SPEED
+        # ---------------------------------------------
+
+        if self.overheat_level == 1:
+            self.overheat_phase += 0.08
+
+        elif self.overheat_level == 2:
             self.overheat_phase += 0.14
+
+        elif self.overheat_level == 3:
+            self.overheat_phase += 0.22
 
     def rebuild_layered_ship(self):
         if self.ship_number != 0:
@@ -1627,8 +1646,17 @@ class Spaceship(pygame.sprite.Sprite):
                     ) / 2
 
             # Red/orange base glow
-            heat_red = 120 + int(100 * pulse)
-            heat_green = 25 + int(90 * pulse)
+            if self.overheat_level == 1:
+                heat_red = 70 + int(60 * pulse)
+                heat_green = 10 + int(35 * pulse)
+
+            elif self.overheat_level == 2:
+                heat_red = 110 + int(90 * pulse)
+                heat_green = 20 + int(70 * pulse)
+
+            else:
+                heat_red = 150 + int(105 * pulse)
+                heat_green = 35 + int(110 * pulse)
 
             heat_overlay = layered_image.copy()
 
@@ -1648,7 +1676,10 @@ class Spaceship(pygame.sprite.Sprite):
                 special_flags=pygame.BLEND_RGBA_ADD
             )
 
-            if pulse > 0.72:
+            if (
+                    self.overheat_level == 3
+                    and pulse > 0.72
+            ):
                 yellow_strength = int(
                     (pulse - 0.72)
                     / 0.28
@@ -2585,7 +2616,32 @@ class Spaceship(pygame.sprite.Sprite):
 
         self.check_escape_mode()
 
+    def update_heat(self):
+        if self.ship_number != 0:
+            return
+
+        current_time = pygame.time.get_ticks()
+
+        # Wait half a second after the most recent
+        # heat-generating action before cooling.
+        if (
+                self.heat > 0
+                and current_time - self.last_heat_time >= 500
+        ):
+            self.heat -= 1
+            self.last_heat_time = current_time
+
+            if self.heat < 0:
+                self.heat = 0
+
+            print(
+                "COOLING:",
+                self.heat
+            )
+
     def update(self):
+
+        self.update_heat()
 
         self.update_overheating()
 

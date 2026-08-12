@@ -85,6 +85,9 @@ last_right_tap = 0
 left_vector_boost = False
 right_vector_boost = False
 
+left_boost_heat_added = False
+right_boost_heat_added = False
+
 double_tap_window = 300
 hold_boost_time = 300
 
@@ -1016,6 +1019,7 @@ def handle_events():
     global left_key_down_time, right_key_down_time
     global last_left_tap, last_right_tap
     global left_vector_boost, right_vector_boost
+    global left_boost_heat_added, right_boost_heat_added
     global layer_viewer_enabled, layer_viewer_index
 
     for event in pygame.event.get():
@@ -1072,10 +1076,12 @@ def handle_events():
             if event.key == pygame.K_LEFT:
                 left_key_down_time = 0
                 left_vector_boost = False
+                left_boost_heat_added = False
 
             if event.key == pygame.K_RIGHT:
                 right_key_down_time = 0
                 right_vector_boost = False
+                right_boost_heat_added = False
 
     # Continuous key holds
     keys = pygame.key.get_pressed()
@@ -1111,6 +1117,15 @@ def handle_events():
             and keys[pygame.K_LEFT]
             and spaceship.has_part("rear_right_wing")
     ):
+        if not left_boost_heat_added:
+            spaceship.heat += 1
+            spaceship.last_heat_time = pygame.time.get_ticks()
+            left_boost_heat_added = True
+
+            print(
+                "VECTOR HEAT:",
+                spaceship.heat
+            )
         spaceship.right_rear_wing_angle += rear_wing_speed
 
         if spaceship.right_rear_wing_angle > 45:
@@ -1129,6 +1144,17 @@ def handle_events():
             and keys[pygame.K_RIGHT]
             and spaceship.has_part("rear_left_wing")
     ):
+
+        if not right_boost_heat_added:
+            spaceship.heat += 1
+            spaceship.last_heat_time = pygame.time.get_ticks()
+            right_boost_heat_added = True
+
+            print(
+                "VECTOR HEAT:",
+                spaceship.heat
+            )
+
         spaceship.left_rear_wing_angle -= rear_wing_speed
 
         if spaceship.left_rear_wing_angle < -45:
@@ -1213,6 +1239,13 @@ def handle_events():
             )
 
             Charge_Shot_group.add(charge_shot)
+            spaceship.heat += 1
+            spaceship.last_heat_time = pygame.time.get_ticks()
+
+            print(
+                "CHARGE HEAT:",
+                spaceship.heat
+            )
             start_screen_shake(intensity=6, duration=8)
 
             # Smaller energy pieces generated from the firing point
@@ -1304,11 +1337,8 @@ def handle_events():
                     * spaceship.get_turn_strength("right")
             )
 
-        if keys[pygame.K_UP] and spaceship.rect.top > 0:
-            spaceship.rect.y -= 5
-
-        if keys[pygame.K_DOWN] and spaceship.rect.bottom < screen_height:
-            spaceship.rect.y += 5
+        # Vertical movement removed.
+        # Up/Down will become missile controls.
 
     # --- Fire normal or emergency bullet ---
 
@@ -1331,6 +1361,14 @@ def handle_events():
 
             bullets_group.add(bullet)
 
+            spaceship.heat += 1
+            spaceship.last_heat_time = pygame.time.get_ticks()
+
+            print(
+                "BULLET HEAT:",
+                spaceship.heat
+            )
+
             spaceship.last_shot = time_now
 
             laser_fx.play()
@@ -1350,6 +1388,13 @@ def handle_events():
             )
 
             bullets_group.add(bullet)
+            spaceship.heat += 1
+            spaceship.last_heat_time = pygame.time.get_ticks()
+
+            print(
+                "EMERGENCY HEAT:",
+                spaceship.heat
+            )
 
             spaceship.last_shot = time_now
 
@@ -1358,7 +1403,7 @@ def handle_events():
     # --- Missile assist ---
     # --- Straight missile shot ---
     if (
-            keys[pygame.K_a]
+            keys[pygame.K_UP]
             and not spaceship.charging
             and spaceship.missiles_remaining > 0
             and time_now - spaceship.last_missile_shot > 750
