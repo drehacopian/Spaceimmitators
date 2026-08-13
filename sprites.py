@@ -1101,6 +1101,26 @@ class ShipDebris(pygame.sprite.Sprite):
 
         part["attached"] = False
 
+        # Rear wings take their matching small jets with them.
+        # Left small jet = layer 8
+        # Right small jet = layer 9
+
+        if part_name == "rear_left_wing":
+
+            for jet_name, jet_part in self.ship_parts.items():
+
+                if jet_part["layer"] == 8:
+                    jet_part["attached"] = False
+                    break
+
+        if part_name == "rear_right_wing":
+
+            for jet_name, jet_part in self.ship_parts.items():
+
+                if jet_part["layer"] == 9:
+                    jet_part["attached"] = False
+                    break
+
         debris = ShipDebris(
             self.ship_layers[layer_index],
             debris_x,
@@ -1184,7 +1204,13 @@ class Spaceship(pygame.sprite.Sprite):
         self.overheat_level = 0
 
         self.heat = 0
+        self.catastrophic_overheat = False
         self.last_heat_time = pygame.time.get_ticks()
+        self.catastrophic_breakup_started = False
+        self.catastrophic_escape = False
+
+        self.catastrophic_burst_active = False
+        self.catastrophic_burst_frames = 0
 
         # Individual layered parts for the red ship only.
         # Other ships continue using their normal single image.
@@ -1548,6 +1574,25 @@ class Spaceship(pygame.sprite.Sprite):
 
         for layer_index in self.ship_layer_order:
 
+            # --------------------------------------------------
+            # REAR SMALL JETS DEPEND DIRECTLY ON REAR WINGS
+            # --------------------------------------------------
+
+            # Layer 8 = left small jet
+            if (
+                    layer_index == 8
+                    and not self.has_part("rear_left_wing")
+            ):
+                continue
+
+            # Layer 9 = right small jet
+            if (
+                    layer_index == 9
+                    and not self.has_part("rear_right_wing")
+            ):
+                continue
+
+            # Normal component visibility check
             if not self.layer_is_attached(layer_index):
                 continue
 
@@ -2616,7 +2661,137 @@ class Spaceship(pygame.sprite.Sprite):
 
         self.check_escape_mode()
 
+    def trigger_catastrophic_breakup(self):
+        if self.ship_number != 0:
+            return
+
+        # Prevent this from happening more than once
+        if getattr(self, "catastrophic_breakup_started", False):
+            return
+
+        self.catastrophic_breakup_started = True
+
+        print("CATASTROPHIC BREAKUP STARTED")
+
+        # --------------------------------------------------
+        # BIG CENTRAL CATASTROPHIC EXPLOSION
+        # Happens for BOTH escape and destruction outcomes
+        # --------------------------------------------------
+
+        big_explosion = Explosion(
+            self.rect.centerx,
+            self.rect.centery,
+            3
+        )
+
+        explosion_group.add(
+            big_explosion
+        )
+
+        explosion_fx.play()
+
+        self.catastrophic_escape = (
+                random.random() < 0.25
+        )
+
+        if self.catastrophic_escape:
+            print("CATASTROPHIC OUTCOME: ESCAPE")
+
+        else:
+            print("CATASTROPHIC OUTCOME: TOTAL DESTRUCTION")
+
+        # Outer / destructible pieces that can violently separate.
+        breakup_parts = [
+            "nose",
+            "sweep_left_wing",
+            "sweep_right_wing",
+            "rear_left_wing",
+            "rear_right_wing"
+        ]
+
+        for part_name in breakup_parts:
+
+            if not self.has_part(part_name):
+                continue
+
+            part = self.ship_parts.get(part_name)
+
+            if part is None:
+                continue
+
+            layer_index = part["layer"]
+
+            # Mark it detached so rebuild_layered_ship()
+            # stops drawing it on the ship.
+            part["attached"] = False
+
+            debris = ShipDebris(
+                self.ship_layers[layer_index],
+                self.rect.centerx,
+                self.rect.centery
+            )
+
+            # Catastrophic failure throws pieces much farther.
+            debris.velocity_x *= 1.25
+            debris.velocity_y *= 1.25
+
+            # Stronger tumbling.
+            debris.rotation_speed *= 1.7
+
+            # Let pieces separate visibly before exploding.
+            debris.explode_time = (
+                    pygame.time.get_ticks()
+                    + random.randint(
+                1600,
+                3000
+            )
+            )
+
+            ship_debris_group.add(debris)
+
+        self.rebuild_layered_ship()
+
+        # --------------------------------------------------
+        # 25% CATASTROPHIC COCKPIT ESCAPE
+        # --------------------------------------------------
+
+        if self.catastrophic_escape:
+            print("STARTING CATASTROPHIC COCKPIT BURST")
+
+            # Do NOT start normal escape thrusters yet.
+            # First punch the core forward out of the explosion.
+            self.catastrophic_burst_active = True
+            self.catastrophic_burst_frames = 0
+
+    def update_catastrophic_burst(self):
+
+        if not self.catastrophic_burst_active:
+            return
+
+        # --------------------------------------------------
+        # INITIAL EMERGENCY EJECTION
+        # Core bolts straight forward before thrusters engage.
+        # --------------------------------------------------
+
+        self.catastrophic_burst_frames += 1
+
+        # Strong initial punch upward.
+        self.rect.y -= 8
+
+        # About 12 frames of violent forward movement.
+        if self.catastrophic_burst_frames >= 12:
+            self.catastrophic_burst_active = False
+
+            print("CATASTROPHIC BURST COMPLETE")
+            print("ESCAPE THRUSTERS ENGAGING")
+
+            # NOW hand control to your existing escape system.
+            self.check_escape_mode()
+
     def update_heat(self):
+
+        self.update_catastrophic_burst()
+
         if self.ship_number != 0:
             return
 
@@ -2637,6 +2812,33 @@ class Spaceship(pygame.sprite.Sprite):
             print(
                 "COOLING:",
                 self.heat
+            )
+
+        # --------------------------------------------------
+        # CATASTROPHIC OVERHEAT TEST
+        # --------------------------------------------------
+
+        if (
+                self.heat >= 12
+                and not self.catastrophic_overheat
+        ):
+            self.catastrophic_overheat = True
+
+            print(
+                "CATASTROPHIC OVERHEAT"
+            )
+
+            self.trigger_catastrophic_breakup()
+
+        if (
+                self.heat < 12
+                and self.catastrophic_overheat
+        ):
+            self.catastrophic_overheat = False
+            self.catastrophic_breakup_started = False
+
+            print(
+                "REACTOR BACK BELOW CRITICAL"
             )
 
     def update(self):
